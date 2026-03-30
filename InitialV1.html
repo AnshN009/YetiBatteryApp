@@ -1,0 +1,1823 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FRC Battery Analyzer</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+:root{
+  --bg:#07090e;--bg2:#0c0f17;--bg3:#11141d;--card:#0d1019;
+  --bord:rgba(255,255,255,0.06);--bord2:rgba(255,255,255,0.11);
+  --txt:#cdd3e8;--mut:#47506a;--mut2:#6a7490;
+  --grn:#00dfa0;--grn2:rgba(0,223,160,0.09);
+  --ylw:#f0b429;--red:#ff4040;--blu:#3d8fff;--ora:#ff6e1a;--pur:#a78bfa;--cya:#22d3ee;
+  --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--txt);font-family:var(--sans);font-weight:300;overflow-x:hidden;display:flex;flex-direction:column}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,223,160,0.006) 3px,rgba(0,223,160,0.006) 4px)}
+
+/* ── HEADER ── */
+header{position:relative;z-index:100;background:rgba(7,9,14,0.97);border-bottom:1px solid var(--bord);padding:0 24px;display:flex;align-items:center;gap:0;flex-shrink:0}
+.logo{font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:0.16em;color:var(--grn);text-transform:uppercase;padding:14px 0;margin-right:20px;white-space:nowrap}
+.logo span{color:var(--mut2);font-weight:400}
+
+/* TAB BAR */
+.tabs{display:flex;gap:0;flex:1;overflow-x:auto}
+.tabs::-webkit-scrollbar{display:none}
+.tab{
+  font-family:var(--mono);font-size:10px;letter-spacing:0.08em;text-transform:uppercase;
+  color:var(--mut2);padding:14px 18px;cursor:pointer;border-bottom:2px solid transparent;
+  transition:all .15s;white-space:nowrap;user-select:none;background:none;border-top:none;border-left:none;border-right:none;
+}
+.tab:hover{color:var(--txt)}
+.tab.active{color:var(--grn);border-bottom-color:var(--grn)}
+.tab .tab-badge{
+  display:inline-block;font-size:9px;padding:1px 6px;border-radius:2px;margin-left:7px;
+  background:rgba(255,255,255,0.06);color:var(--mut2);vertical-align:middle;
+}
+.tab.active .tab-badge{background:var(--grn2);color:var(--grn)}
+
+.hbtns{display:flex;gap:8px;margin-left:16px;flex-shrink:0;padding:10px 0}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border:1px solid var(--bord2);border-radius:4px;background:var(--bg3);color:var(--txt);font-family:var(--sans);font-size:12px;font-weight:400;cursor:pointer;transition:all .15s;white-space:nowrap}
+.btn:hover{border-color:var(--grn);color:var(--grn)}
+.btn.p{border-color:rgba(0,223,160,0.4);color:var(--grn);background:var(--grn2)}
+.btn.p:hover{background:rgba(0,223,160,0.16)}
+
+/* ── CONTENT AREA ── */
+#appContent{flex:1;overflow-y:auto;position:relative;z-index:1}
+
+/* ── UPLOAD PAGE ── */
+#uploadPage{padding:40px 28px 60px;max-width:900px;margin:0 auto}
+.dropzone{border:1px solid var(--bord2);border-radius:8px;padding:52px 28px;text-align:center;cursor:pointer;background:repeating-conic-gradient(var(--bg2) 0% 25%,var(--bg3) 0% 50%) 0 0/28px 28px;transition:border-color .2s}
+.dropzone:hover,.dropzone.over{border-color:var(--grn)}
+.dz-icon{font-size:44px;display:block;margin-bottom:14px}
+.dz-title{font-size:21px;font-weight:500;margin-bottom:9px}
+.dz-sub{font-size:13px;color:var(--mut2);line-height:1.8;max-width:500px;margin:0 auto}
+.dz-sub code{font-family:var(--mono);font-size:11px;color:var(--grn);background:var(--grn2);padding:1px 5px;border-radius:3px}
+#fileInput{display:none}
+.fmt-tips{margin-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.fc{background:var(--bg2);border:1px solid var(--bord);border-radius:6px;padding:14px 16px}
+.fc h4{font-family:var(--mono);font-size:9px;letter-spacing:0.12em;color:var(--grn);text-transform:uppercase;margin-bottom:7px}
+.fc p{font-size:12px;color:var(--mut2);line-height:1.65}
+.fc code{font-family:var(--mono);font-size:11px;color:var(--ylw)}
+
+/* ── LOADING ── */
+#loadBar{display:none;text-align:center;padding:80px;font-family:var(--mono);font-size:12px;color:var(--grn)}
+.spinner{display:inline-block;width:28px;height:28px;border:2px solid var(--bord2);border-top-color:var(--grn);border-radius:50%;animation:spin .7s linear infinite;margin-bottom:14px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── PAGE PANELS ── */
+.page{display:none;padding:24px 24px 60px;max-width:1400px;margin:0 auto}
+.page.active{display:block}
+
+/* ── STAT GRID ── */
+.sg{display:grid;grid-template-columns:repeat(auto-fill,minmax(152px,1fr));gap:9px;margin-bottom:16px}
+.sc{background:var(--card);border:1px solid var(--bord);border-radius:5px;padding:14px 16px;border-left:2px solid var(--sl,transparent);transition:border-color .15s}
+.sc:hover{border-color:var(--bord2)}
+.sc.g{--sl:var(--grn)}.sc.y{--sl:var(--ylw)}.sc.r{--sl:var(--red)}.sc.b{--sl:var(--blu)}.sc.p{--sl:var(--pur)}.sc.o{--sl:var(--ora)}.sc.c{--sl:var(--cya)}
+.sl{font-family:var(--mono);font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--mut);margin-bottom:8px}
+.sv{font-family:var(--mono);font-size:22px;font-weight:600;line-height:1;color:var(--txt)}
+.su{font-size:11px;font-weight:400;color:var(--mut2);margin-left:1px}
+.sn{font-size:11px;color:var(--mut);margin-top:5px;line-height:1.45}
+
+/* ── CHART CARDS ── */
+.cc{background:var(--card);border:1px solid var(--bord);border-radius:6px;padding:18px 20px;margin-bottom:12px}
+.cc-title{font-family:var(--mono);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:var(--mut2);margin-bottom:3px;display:flex;align-items:center;gap:8px}
+.cc-sub{font-size:11px;color:var(--mut);margin-bottom:12px;line-height:1.5}
+.cw{position:relative}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px}
+.g12{display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-bottom:12px}
+@media(max-width:900px){.g2,.g3,.g12{grid-template-columns:1fr}}
+
+/* ── INFO BOX ── */
+.info{background:var(--bg2);border:1px solid rgba(0,223,160,0.13);border-radius:5px;padding:14px 18px;margin-bottom:16px}
+.info h4{font-family:var(--mono);font-size:9px;color:var(--grn);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:7px}
+.info p{font-size:12px;color:var(--mut2);line-height:1.75}
+.info p strong{color:var(--txt);font-weight:500}
+.info ul{margin:5px 0 0 16px}
+.info li{font-size:12px;color:var(--mut2);line-height:1.75}
+
+/* ── VERDICT CARD ── */
+.verdict{border:1px solid var(--bord2);border-radius:7px;padding:22px 28px;display:flex;gap:22px;align-items:flex-start;background:var(--bg2);position:relative;overflow:hidden;margin-bottom:20px}
+.verdict::after{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--vc,var(--grn))}
+.v-score{font-family:var(--mono);font-size:46px;font-weight:600;color:var(--vc,var(--grn));line-height:1;margin-bottom:2px}
+.v-sub{font-family:var(--mono);font-size:9px;letter-spacing:0.1em;color:var(--mut);text-transform:uppercase;margin-bottom:10px}
+.v-label{font-size:16px;font-weight:500;margin-bottom:8px}
+.v-body{font-size:12px;color:var(--mut2);line-height:1.8}
+.v-body strong{color:var(--txt);font-weight:500}
+
+/* ── SECTION DIVIDER ── */
+.sdiv{font-family:var(--mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--mut);padding:8px 0 10px;border-bottom:1px solid var(--bord);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.sdiv::before{content:'//';color:var(--grn);font-weight:600}
+.sdiv-badge{margin-left:auto;color:var(--mut);font-size:9px}
+
+/* ── BANDS ── */
+.bands{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.bd{font-family:var(--mono);font-size:10px;padding:2px 8px;border-radius:3px;border:1px solid}
+
+/* ── LEGEND ── */
+.lgnd{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:8px}
+.li{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;color:var(--mut2)}
+.ld{width:8px;height:8px;border-radius:2px;flex-shrink:0}
+.ll{width:18px;height:2px;flex-shrink:0}
+.ld2{width:18px;height:2px;flex-shrink:0;background:repeating-linear-gradient(90deg,currentColor 0,currentColor 3px,transparent 3px,transparent 6px)}
+
+/* ── TABLE ── */
+.tw{background:var(--card);border:1px solid var(--bord);border-radius:6px;overflow:hidden;overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:11px;font-family:var(--mono)}
+th{padding:9px 13px;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--mut);background:var(--bg3);border-bottom:1px solid var(--bord);font-weight:400;text-align:left;white-space:nowrap}
+td{padding:8px 13px;border-bottom:1px solid rgba(255,255,255,0.03);white-space:nowrap;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(255,255,255,0.015)}
+.tag{display:inline-block;padding:2px 7px;border-radius:3px;font-size:9px;letter-spacing:0.05em}
+.tg{background:rgba(0,223,160,0.1);color:#00dfa0;border:1px solid rgba(0,223,160,0.2)}
+.ty{background:rgba(240,180,41,0.1);color:#f0b429;border:1px solid rgba(240,180,41,0.2)}
+.tr{background:rgba(255,64,64,0.1);color:#ff4040;border:1px solid rgba(255,64,64,0.2)}
+.tb{background:rgba(61,143,255,0.1);color:#3d8fff;border:1px solid rgba(61,143,255,0.2)}
+
+/* ── NO DATA ── */
+.nodata{text-align:center;padding:48px 20px;font-family:var(--mono);font-size:12px;color:var(--mut)}
+.nodata span{display:block;font-size:28px;margin-bottom:12px}
+</style>
+</head>
+<body>
+
+<!-- HEADER + TABS -->
+<header>
+  <div class="logo">FRC<span> // </span>Battery</div>
+  <div class="tabs" id="tabBar">
+    <button class="tab active" onclick="showTab('upload')" id="tab-upload">Upload</button>
+    <button class="tab" onclick="showTab('overview')" id="tab-overview" style="display:none">Overview <span class="tab-badge" id="badge-overview">—</span></button>
+    <button class="tab" onclick="showTab('voltage')" id="tab-voltage" style="display:none">① Voltage <span class="tab-badge" id="badge-voltage">—</span></button>
+    <button class="tab" onclick="showTab('current')" id="tab-current" style="display:none">② Current <span class="tab-badge" id="badge-current">—</span></button>
+    <button class="tab" onclick="showTab('power')" id="tab-power" style="display:none">③ Power <span class="tab-badge" id="badge-power">—</span></button>
+    <button class="tab" onclick="showTab('impedance')" id="tab-impedance" style="display:none">④ Impedance <span class="tab-badge" id="badge-impedance">—</span></button>
+    <button class="tab" onclick="showTab('bfg')" id="tab-bfg" style="display:none">⑤ BFG Data <span class="tab-badge" id="badge-bfg">—</span></button>
+  </div>
+  <div class="hbtns">
+    <button class="btn p" onclick="resetToUpload()" id="newFileBtn" style="display:none">⬆ New files</button>
+    <button class="btn" onclick="loadDemo()">⚡ Demo</button>
+  </div>
+</header>
+
+<div id="appContent">
+
+  <!-- UPLOAD -->
+  <div id="page-upload" class="page active" style="display:block">
+    <div id="uploadPage" style="padding:32px 24px 60px;max-width:960px;margin:0 auto">
+
+      <!-- title -->
+      <div style="margin-bottom:22px">
+        <div style="font-family:var(--mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--mut2);margin-bottom:6px">// file inputs</div>
+        <div style="font-size:18px;font-weight:500">Load your match data</div>
+        <div style="font-size:12px;color:var(--mut2);margin-top:5px;line-height:1.65">
+          Drop a <strong style="color:var(--txt)">DS Log</strong> (required) and optionally a <strong style="color:var(--txt)">BFG CAN CSV</strong> from the RoboRIO.
+          Any format is accepted — the parser auto-detects delimiter, columns, and layout.
+        </div>
+      </div>
+
+      <!-- two drop zones side by side -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px">
+
+        <!-- DS LOG -->
+        <div>
+          <div style="font-family:var(--mono);font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--grn);margin-bottom:8px;display:flex;align-items:center;gap:8px">
+            <span style="background:var(--grn2);border:1px solid rgba(0,223,160,0.3);padding:2px 8px;border-radius:3px">Required</span>
+            DS Log file
+          </div>
+          <div class="dropzone" id="dz-ds" onclick="document.getElementById('fileInputDS').click()" style="padding:32px 20px;min-height:160px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px">
+            <span style="font-size:32px" id="dz-ds-icon">📋</span>
+            <div id="dz-ds-name" style="font-family:var(--mono);font-size:11px;color:var(--mut2)">No file selected</div>
+            <div style="font-size:11px;color:var(--mut);text-align:center;line-height:1.6">
+              <code style="font-family:var(--mono);font-size:10px;color:var(--grn);background:var(--grn2);padding:1px 5px;border-radius:3px">.dslog</code> binary or
+              <code style="font-family:var(--mono);font-size:10px;color:var(--grn);background:var(--grn2);padding:1px 5px;border-radius:3px">.csv</code> export<br>
+              Comma, tab, or semicolon delimited
+            </div>
+            <button class="btn p" style="margin-top:4px" onclick="event.stopPropagation();document.getElementById('fileInputDS').click()">⬆ Choose DS log</button>
+          </div>
+          <input type="file" id="fileInputDS" accept="*">
+        </div>
+
+        <!-- BFG CAN CSV -->
+        <div>
+          <div style="font-family:var(--mono);font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--ylw);margin-bottom:8px;display:flex;align-items:center;gap:8px">
+            <span style="background:rgba(240,180,41,0.1);border:1px solid rgba(240,180,41,0.3);padding:2px 8px;border-radius:3px;color:var(--ylw)">Optional</span>
+            BFG CAN data (RoboRIO CSV)
+          </div>
+          <div class="dropzone" id="dz-bfg" onclick="document.getElementById('fileInputBFG').click()" style="padding:32px 20px;min-height:160px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px">
+            <span style="font-size:32px" id="dz-bfg-icon">🔋</span>
+            <div id="dz-bfg-name" style="font-family:var(--mono);font-size:11px;color:var(--mut2)">No file selected (optional)</div>
+            <div style="font-size:11px;color:var(--mut);text-align:center;line-height:1.6">
+              REV BFG data logged via CAN on the RoboRIO.<br>
+              Any CSV layout — parser finds voltage, current,<br>
+              temperature, SOC, and resistance columns
+            </div>
+            <button class="btn" style="margin-top:4px;border-color:rgba(240,180,41,0.3);color:var(--ylw)" onclick="event.stopPropagation();document.getElementById('fileInputBFG').click()">⬆ Choose BFG CSV</button>
+          </div>
+          <input type="file" id="fileInputBFG" accept="*">
+        </div>
+
+      </div>
+
+      <!-- analyze button -->
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px">
+        <button class="btn p" id="analyzeBtn" onclick="startAnalysis()" style="padding:10px 28px;font-size:13px;opacity:0.4;pointer-events:none">
+          ⚡ Analyze
+        </button>
+        <button class="btn" onclick="loadDemo()">Load demo match</button>
+        <div id="readyHint" style="font-family:var(--mono);font-size:10px;color:var(--mut)">Select a DS Log file to enable analysis</div>
+      </div>
+
+      <!-- format tips -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+        <div class="fc">
+          <h4>DS Log → CSV export</h4>
+          <p>DS Log File Viewer → select <code>.dslog</code> → <code>File → Export CSV</code>. Enable <code>Robot Current</code> for impedance analysis. The raw <code>.dslog</code> binary also works directly.</p>
+        </div>
+        <div class="fc">
+          <h4>BFG CAN CSV format</h4>
+          <p>Log the REV BFG via CAN on your RoboRIO using WPILib or Advantage Scope. The parser accepts any column layout and any delimiter — it searches for columns named or valued like voltage, current, temperature, SOC, and resistance.</p>
+        </div>
+        <div class="fc">
+          <h4>BFG columns detected</h4>
+          <p>
+            <code>voltage</code> (V) · <code>current</code> (A) · <code>temperature</code> (°C) ·
+            <code>stateOfCharge</code> (%) · <code>resistance</code> (mΩ) · <code>fullCapacity</code> (Ah) ·
+            <code>remainingCapacity</code> (Ah) · <code>cycleCount</code>
+          </p>
+        </div>
+      </div>
+
+    </div>
+    <div id="loadBar"><div class="spinner"></div><br><span id="loadMsg">Parsing…</span></div>
+  </div>
+
+  <!-- OVERVIEW -->
+  <div id="page-overview" class="page">
+    <div class="sdiv">summary verdict</div>
+    <div id="verdEl"></div>
+    <div class="sdiv">all metrics at a glance</div>
+    <div class="sg" id="overviewGrid"></div>
+    <div class="sdiv">full match trace — voltage + current + power</div>
+    <div class="cc">
+      <div class="cc-title">Full match overview</div>
+      <div class="cc-sub">Voltage (green), current (blue dashed), and power (purple dashed) across the entire match. Use this to correlate events across all signals.</div>
+      <div class="lgnd">
+        <span class="li"><span class="ll" style="background:#00dfa0"></span>Voltage (V) →left</span>
+        <span class="li"><span class="ll" style="background:rgba(61,143,255,0.7)"></span>Current (A) →right</span>
+        <span class="li"><span class="ll" style="background:rgba(167,139,250,0.6)"></span>Power (W) →right</span>
+      </div>
+      <div class="cw" style="height:300px"><canvas id="cOverview"></canvas></div>
+    </div>
+    <div class="g2">
+      <div class="cc">
+        <div class="cc-title">Phase comparison — voltage</div>
+        <div class="cc-sub">Min, mean, and max voltage by match phase.</div>
+        <div class="cw" style="height:200px"><canvas id="cPhaseV"></canvas></div>
+      </div>
+      <div class="cc">
+        <div class="cc-title">Phase comparison — current &amp; power</div>
+        <div class="cc-sub">Mean current and mean power by match phase.</div>
+        <div class="cw" style="height:200px"><canvas id="cPhaseCP"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VOLTAGE PAGE -->
+  <div id="page-voltage" class="page">
+    <div class="sdiv">voltage statistics <span class="sdiv-badge" id="vStatBadge"></span></div>
+    <div class="sg" id="vGrid"></div>
+
+    <div class="info">
+      <h4>How to read these graphs</h4>
+      <p>
+        <strong>Raw voltage</strong> (faint) shows every sample. <strong>0.1 s rolling minimum</strong> (~5 samples at 50 Hz) catches individual brownout spikes without smoothing them away.
+        The radio brownouts at <strong>6.3 V</strong>. CAN controllers fault below <strong>~6.5 V</strong>. Motor torque drops meaningfully below <strong>8.5 V</strong>.
+        Jitter in the rolling-min trace = high-frequency current transients from your drivetrain or shooter.
+      </p>
+    </div>
+
+    <div class="sdiv">voltage trace</div>
+    <div class="cc">
+      <div class="cc-title">Voltage — raw samples + 0.1s rolling minimum</div>
+      <div class="cc-sub">Faint = every raw sample. Bold colored line = 0.1 s rolling min. Segments turn red/orange at threshold crossings.</div>
+      <div class="lgnd">
+        <span class="li"><span class="ll" style="background:rgba(0,223,160,0.25)"></span>Raw voltage</span>
+        <span class="li"><span class="ll" style="background:#00dfa0"></span>0.1s rolling min</span>
+        <span class="li"><span class="ll" style="background:rgba(255,64,64,0.6)"></span>6.3V radio brownout</span>
+        <span class="li"><span class="ll" style="background:rgba(255,110,26,0.5)"></span>8.5V motor loss</span>
+      </div>
+      <div class="cw" style="height:300px"><canvas id="cVoltMain"></canvas></div>
+    </div>
+
+    <div class="sdiv">brownout risk breakdown</div>
+    <div class="g3">
+      <div class="cc">
+        <div class="cc-title">Voltage distribution</div>
+        <div class="cc-sub">Sample count per voltage bin. Red = below 6.3V, orange = below 8.5V.</div>
+        <div class="cw" style="height:200px"><canvas id="cVHist"></canvas></div>
+      </div>
+      <div class="cc">
+        <div class="cc-title">Time below thresholds</div>
+        <div class="cc-sub">Cumulative seconds spent below each danger threshold.</div>
+        <div class="cw" style="height:200px"><canvas id="cVThresh"></canvas></div>
+      </div>
+      <div class="cc">
+        <div class="cc-title">Rolling minimum — 0.1s window</div>
+        <div class="cc-sub">Worst-case voltage in every 0.1 s window. Colored by severity.</div>
+        <div class="cw" style="height:200px"><canvas id="cVRollMin"></canvas></div>
+      </div>
+    </div>
+
+    <div class="sdiv">voltage vs time — phase-annotated</div>
+    <div class="cc">
+      <div class="cc-title">Voltage trend — 5s rolling mean (big-picture sag)</div>
+      <div class="cc-sub">5 s rolling mean of voltage showing overall battery depletion trend across the match.</div>
+      <div class="cw" style="height:200px"><canvas id="cVTrend"></canvas></div>
+    </div>
+
+    <div class="sdiv">brownout events log</div>
+    <div class="tw">
+      <table><thead><tr><th>Time (s)</th><th>Min V during event</th><th>Duration (s)</th><th>Threshold crossed</th><th>Phase</th></tr></thead>
+      <tbody id="browoutEvts"></tbody></table>
+    </div>
+  </div>
+
+  <!-- CURRENT PAGE -->
+  <div id="page-current" class="page">
+    <div id="noCurrentPage" class="nodata" style="display:none"><span>〰</span>No current data found in this log.<br>Re-export with Robot Current logging enabled.</div>
+    <div id="currentContent">
+      <div class="sdiv">current statistics <span class="sdiv-badge" id="cStatBadge"></span></div>
+      <div class="sg" id="cGrid"></div>
+
+      <div class="info">
+        <h4>Reading current graphs</h4>
+        <p>
+          FRC 18 Ah SLA batteries sustain ~18 A continuously and burst to ~200 A before voltage collapses.
+          The main breaker trips at <strong>120 A sustained</strong> (with a time-delay curve — short spikes above 120 A are okay).
+          Sustained current above <strong>80–100 A</strong> depletes the battery quickly and raises internal temperature.
+          Peaks above <strong>150 A</strong> on a degraded battery are primary brownout triggers. <strong>Stagger simultaneous actuations</strong> to reduce peak current.
+        </p>
+      </div>
+
+      <div class="sdiv">current trace</div>
+      <div class="cc">
+        <div class="cc-title">Current — raw samples + 0.1s rolling mean</div>
+        <div class="cc-sub">Faint = every raw sample. Solid line = 0.1 s rolling mean. Dashed horizontals = capacity thresholds.</div>
+        <div class="lgnd">
+          <span class="li"><span class="ll" style="background:rgba(61,143,255,0.25)"></span>Raw current</span>
+          <span class="li"><span class="ll" style="background:#3d8fff"></span>0.1s rolling mean</span>
+          <span class="li"><span class="ll" style="background:rgba(255,110,26,0.7)"></span>120A main breaker</span>
+          <span class="li"><span class="ll" style="background:rgba(255,64,64,0.7)"></span>160A critical</span>
+        </div>
+        <div class="cw" style="height:300px"><canvas id="cCurrMain"></canvas></div>
+      </div>
+
+      <div class="sdiv">current demand analysis</div>
+      <div class="g3">
+        <div class="cc">
+          <div class="cc-title">Current distribution</div>
+          <div class="cc-sub">Sample count per current bin. Right tail = spike frequency.</div>
+          <div class="cw" style="height:200px"><canvas id="cCHist"></canvas></div>
+        </div>
+        <div class="cc">
+          <div class="cc-title">Time above thresholds</div>
+          <div class="cc-sub">Cumulative seconds spent above capacity thresholds.</div>
+          <div class="cw" style="height:200px"><canvas id="cCThresh"></canvas></div>
+        </div>
+        <div class="cc">
+          <div class="cc-title">1s rolling max current</div>
+          <div class="cc-sub">Worst-case current in every 1 s window — brownout risk predictor.</div>
+          <div class="cw" style="height:200px"><canvas id="cCRollMax"></canvas></div>
+        </div>
+      </div>
+
+      <div class="sdiv">current vs voltage correlation</div>
+      <div class="g2">
+        <div class="cc">
+          <div class="cc-title">Voltage vs current scatter</div>
+          <div class="cc-sub">Every sample plotted. Downward slope = battery sag under load.</div>
+          <div class="cw" style="height:220px"><canvas id="cVIScatter"></canvas></div>
+        </div>
+        <div class="cc">
+          <div class="cc-title">Current trend — 5s rolling mean</div>
+          <div class="cc-sub">Big-picture current demand across the match. Rising trend = progressive load increase.</div>
+          <div class="cw" style="height:220px"><canvas id="cCTrend"></canvas></div>
+        </div>
+      </div>
+
+      <div class="sdiv">peak current events (top 60)</div>
+      <div class="tw">
+        <table><thead><tr><th>Time (s)</th><th>Current (A)</th><th>Voltage (V)</th><th>Concurrent sag (V)</th><th>Severity</th></tr></thead>
+        <tbody id="peakCurrEvts"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- POWER PAGE -->
+  <div id="page-power" class="page">
+    <div id="noPowerPage" class="nodata" style="display:none"><span>〰</span>No current data — power requires V × I.<br>Re-export with Robot Current logging enabled.</div>
+    <div id="powerContent">
+      <div class="sdiv">power statistics <span class="sdiv-badge" id="pStatBadge"></span></div>
+      <div class="sg" id="pGrid"></div>
+
+      <div class="info">
+        <h4>Reading power graphs</h4>
+        <p>
+          Power (W) = V × I. A healthy FRC match sees <strong>400–1000 W average</strong> with peaks to <strong>2500 W</strong>.
+          Total energy consumed tells you what fraction of the battery's <strong>~216 Wh</strong> (18 Ah × 12 V) capacity you used.
+          Using more than 70% in one match means the second consecutive match will have a noticeably weaker battery.
+          A rising rolling-mean power curve means your robot is demanding more power as voltage drops (sag forces higher current to maintain torque).
+        </p>
+      </div>
+
+      <div class="sdiv">power trace</div>
+      <div class="cc">
+        <div class="cc-title">Power — raw + 1s rolling mean</div>
+        <div class="cc-sub">Faint = instantaneous power per sample. Solid = 1 s rolling mean showing demand trends.</div>
+        <div class="lgnd">
+          <span class="li"><span class="ll" style="background:rgba(167,139,250,0.25)"></span>Raw power</span>
+          <span class="li"><span class="ll" style="background:#a78bfa"></span>1s rolling mean</span>
+          <span class="li"><span class="ll" style="background:rgba(255,110,26,0.6)"></span>1500W sustained warn</span>
+        </div>
+        <div class="cw" style="height:300px"><canvas id="cPowMain"></canvas></div>
+      </div>
+
+      <div class="sdiv">energy &amp; capacity analysis</div>
+      <div class="g3">
+        <div class="cc">
+          <div class="cc-title">Cumulative energy consumed</div>
+          <div class="cc-sub">Running total Wh used. Dashed line = 70% battery capacity.</div>
+          <div class="cw" style="height:200px"><canvas id="cEnergy"></canvas></div>
+        </div>
+        <div class="cc">
+          <div class="cc-title">Power distribution</div>
+          <div class="cc-sub">Sample count per power bin. Right tail = high-demand frequency.</div>
+          <div class="cw" style="height:200px"><canvas id="cPHist"></canvas></div>
+        </div>
+        <div class="cc">
+          <div class="cc-title">5s rolling mean power trend</div>
+          <div class="cc-sub">Smoothed power demand across the match. Rising = battery or code issue.</div>
+          <div class="cw" style="height:200px"><canvas id="cPTrend"></canvas></div>
+        </div>
+      </div>
+
+      <div class="sdiv">power vs voltage correlation</div>
+      <div class="g2">
+        <div class="cc">
+          <div class="cc-title">Power vs voltage scatter</div>
+          <div class="cc-sub">High power events tend to depress voltage. Cluster shape shows battery behavior under combined load.</div>
+          <div class="cw" style="height:220px"><canvas id="cPVScatter"></canvas></div>
+        </div>
+        <div class="cc">
+          <div class="cc-title">Estimated remaining capacity over match</div>
+          <div class="cc-sub">SOC-based estimate of usable energy remaining as the match progresses.</div>
+          <div class="cw" style="height:220px"><canvas id="cSOC"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- IMPEDANCE PAGE -->
+  <div id="page-impedance" class="page">
+    <div id="noImpPage" class="nodata" style="display:none"><span>〰</span>No current data — impedance requires R = (V_oc − V) / I.<br>Re-export with Robot Current logging enabled.</div>
+    <div id="impContent">
+      <div class="sdiv">impedance statistics <span class="sdiv-badge" id="iStatBadge"></span></div>
+      <div class="bands" id="impBands"></div>
+      <div class="sg" id="iGrid"></div>
+
+      <div class="info">
+        <h4>What internal resistance means</h4>
+        <p>
+          <strong>R = (V_oc − V) / I</strong>. Computed for every sample where I &gt; 15 A.
+          A fresh 18 Ah SLA sits at <strong>8–12 mΩ</strong>. At 30 mΩ, a 120 A pull drops voltage by <strong>3.6 V</strong> — enough to trigger radio brownout from nominal 12.0 V.
+        </p>
+        <ul>
+          <li><strong>Rising trend over match</strong> → battery heating internally or depleting — resistance increases as plates sulfate under load</li>
+          <li><strong>Sharp isolated spikes</strong> → simultaneous high-current actuations — stagger them in code</li>
+          <li><strong>High median, few spikes</strong> → uniformly aged battery — replace before competition</li>
+          <li><strong>Wide histogram tail</strong> → frequent transient spikes — design/code issue</li>
+        </ul>
+      </div>
+
+      <div class="sdiv">impedance over time</div>
+      <div class="cc">
+        <div class="cc-title">Impedance — per-sample + 0.5s rolling median</div>
+        <div class="cc-sub">Bars = per-sample R (colored by severity). Line = 0.5 s rolling median. Dashed = 28 mΩ replacement threshold.</div>
+        <div class="lgnd">
+          <span class="li"><span class="ld" style="background:rgba(0,223,160,0.5)"></span>&lt;18mΩ good</span>
+          <span class="li"><span class="ld" style="background:rgba(240,180,41,0.6)"></span>18–28mΩ wear</span>
+          <span class="li"><span class="ld" style="background:rgba(255,64,64,0.65)"></span>&gt;28mΩ replace</span>
+          <span class="li"><span class="ll" style="background:#f0b429"></span>0.5s rolling median</span>
+        </div>
+        <div class="cw" style="height:300px"><canvas id="cImpMain"></canvas></div>
+      </div>
+
+      <div class="sdiv">impedance distribution &amp; regression</div>
+      <div class="g3">
+        <div class="cc">
+          <div class="cc-title">Impedance distribution</div>
+          <div class="cc-sub">Histogram of all R values. Green line = median. Narrow peak = consistent; wide tail = spiky.</div>
+          <div class="cw" style="height:210px"><canvas id="cIHist"></canvas></div>
+        </div>
+        <div class="cc">
+          <div class="cc-title">Voltage sag vs current — slope = R</div>
+          <div class="cc-sub">Scatter of (V_oc − V) vs I. Regression slope = internal resistance R.</div>
+          <div class="cw" style="height:210px"><canvas id="cIScat"></canvas></div>
+        </div>
+        <div class="cc">
+          <div class="cc-title">Spike factor over time</div>
+          <div class="cc-sub">Ratio of instantaneous R to rolling median. Spikes &gt;3× = problematic transients.</div>
+          <div class="cw" style="height:210px"><canvas id="cISpike"></canvas></div>
+        </div>
+      </div>
+
+      <div class="sdiv">impedance trend analysis</div>
+      <div class="g2">
+        <div class="cc">
+          <div class="cc-title">Rolling median impedance — 2s window</div>
+          <div class="cc-sub">Slower-smoothed trend reveals whether resistance rises systematically across the match (thermal / depletion).</div>
+          <div class="cw" style="height:200px"><canvas id="cITrend"></canvas></div>
+        </div>
+        <div class="cc">
+          <div class="cc-title">Impedance percentile bands over time</div>
+          <div class="cc-sub">P10 / P50 / P90 in 10-second buckets. Gap between P10 and P90 = spike severity.</div>
+          <div class="cw" style="height:200px"><canvas id="cIBands"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ BFG PAGE ══ -->
+  <div id="page-bfg" class="page">
+    <div id="noBfgMsg" class="nodata" style="display:none">
+      <span style="font-size:28px;display:block;margin-bottom:12px">🔋</span>
+      No BFG CAN data loaded.<br>
+      <span style="font-size:11px;color:var(--mut);margin-top:8px;display:block">Upload a BFG CSV from the RoboRIO on the upload page to see BFG-specific analysis.</span>
+    </div>
+    <div id="bfgContent" style="display:none">
+      <div class="sdiv">BFG sensor statistics <span class="sdiv-badge" id="bfgStatBadge"></span></div>
+      <div class="sg" id="bfgGrid"></div>
+
+      <div class="info">
+        <h4>About REV BFG (Battery Function Gauge) data</h4>
+        <p>
+          The REV BFG communicates over CAN and provides <strong>hardware-measured</strong> battery metrics that are more accurate than estimates derived from voltage/current math alone.
+          Key fields: <strong>voltage</strong> (V), <strong>current</strong> (A), <strong>temperature</strong> (°C), <strong>state of charge</strong> (%), <strong>internal resistance</strong> (mΩ),
+          <strong>full capacity</strong> (Ah), <strong>remaining capacity</strong> (Ah), and <strong>cycle count</strong>.
+          Temperature is especially important — resistance rises sharply when the battery is cold (&lt;15°C) and again when it overheats (&gt;45°C).
+          The BFG's measured resistance is more accurate than the V/I estimation method used in the Impedance tab.
+        </p>
+        <ul>
+          <li><strong>Rising temperature + rising resistance</strong> → battery heating under repeated discharge — let it rest between matches</li>
+          <li><strong>High cycle count + high resistance</strong> → end of useful life — replace</li>
+          <li><strong>Remaining capacity much less than full capacity</strong> → capacity fade — battery can't deliver its rated energy</li>
+          <li><strong>SOC drops faster than expected</strong> → high self-discharge or internal short — retire the battery</li>
+        </ul>
+      </div>
+
+      <div class="sdiv">BFG voltage &amp; current trace</div>
+      <div class="cc">
+        <div class="cc-title">BFG voltage + current — raw samples</div>
+        <div class="cc-sub">Direct measurements from the BFG sensor over CAN. More accurate than DS log voltage at high sample rates.</div>
+        <div class="lgnd">
+          <span class="li"><span class="ll" style="background:#00dfa0"></span>BFG voltage (V)</span>
+          <span class="li"><span class="ll" style="background:rgba(61,143,255,0.7)"></span>BFG current (A)</span>
+        </div>
+        <div class="cw" style="height:260px"><canvas id="cBfgVI"></canvas></div>
+      </div>
+
+      <div class="sdiv">state of charge &amp; capacity</div>
+      <div class="g2">
+        <div class="cc">
+          <div class="cc-title">State of charge over match</div>
+          <div class="cc-sub">Hardware-measured SOC from the BFG coulomb counter. More accurate than voltage-derived estimates.</div>
+          <div class="cw" style="height:210px"><canvas id="cBfgSOC"></canvas></div>
+        </div>
+        <div class="cc">
+          <div class="cc-title">Remaining vs full capacity</div>
+          <div class="cc-sub">Tracks capacity fade over time. A large gap = the battery can no longer deliver its rated energy.</div>
+          <div class="cw" style="height:210px"><canvas id="cBfgCap"></canvas></div>
+        </div>
+      </div>
+
+      <div class="sdiv">temperature &amp; resistance</div>
+      <div class="g2">
+        <div class="cc">
+          <div class="cc-title">Battery temperature over match</div>
+          <div class="cc-sub">Danger zones: &lt;15°C (cold, high resistance) and &gt;45°C (overheating, accelerated aging).</div>
+          <div class="lgnd">
+            <span class="li"><span class="ll" style="background:#f0b429"></span>Temperature (°C)</span>
+            <span class="li"><span class="ll" style="background:rgba(255,64,64,0.6)"></span>45°C danger</span>
+            <span class="li"><span class="ll" style="background:rgba(61,143,255,0.5)"></span>15°C cold</span>
+          </div>
+          <div class="cw" style="height:210px"><canvas id="cBfgTemp"></canvas></div>
+        </div>
+        <div class="cc">
+          <div class="cc-title">BFG-measured internal resistance over match</div>
+          <div class="cc-sub">Hardware R measurement from the BFG (mΩ). More accurate than V/I estimation. Rising = heating or depletion.</div>
+          <div class="lgnd">
+            <span class="li"><span class="ll" style="background:#a78bfa"></span>BFG resistance (mΩ)</span>
+            <span class="li"><span class="ll" style="background:rgba(255,110,26,0.6)"></span>28mΩ replacement threshold</span>
+          </div>
+          <div class="cw" style="height:210px"><canvas id="cBfgR"></canvas></div>
+        </div>
+      </div>
+
+      <div class="sdiv">resistance vs temperature correlation</div>
+      <div class="g2">
+        <div class="cc">
+          <div class="cc-title">Resistance vs temperature scatter</div>
+          <div class="cc-sub">Resistance should be lowest at 25–35°C. Rising tails on either side = cold or heat degradation.</div>
+          <div class="cw" style="height:210px"><canvas id="cBfgRTScat"></canvas></div>
+        </div>
+        <div class="cc">
+          <div class="cc-title">BFG resistance vs DS log impedance comparison</div>
+          <div class="cc-sub">BFG R (hardware) vs V/I estimated R (from DS log). Divergence = measurement method difference or internal sensor calibration drift.</div>
+          <div class="cw" style="height:210px"><canvas id="cBfgRComp"></canvas></div>
+        </div>
+      </div>
+
+      <div class="sdiv">BFG data table (first 200 rows)</div>
+      <div class="tw" style="max-height:360px;overflow-y:auto">
+        <table><thead><tr>
+          <th>Time (s)</th><th>Voltage (V)</th><th>Current (A)</th><th>SOC (%)</th>
+          <th>Temp (°C)</th><th>Resistance (mΩ)</th><th>Remaining (Ah)</th><th>Full Cap (Ah)</th>
+        </tr></thead>
+        <tbody id="bfgTable"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /appContent -->
+
+<script>
+// ═══════════════════════════════════════════════════════
+// TAB NAVIGATION
+// ═══════════════════════════════════════════════════════
+function showTab(name) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  const pg=document.getElementById('page-'+name);
+  if(pg){pg.classList.add('active');}
+  const tb=document.getElementById('tab-'+name);
+  if(tb){tb.classList.add('active');}
+  document.getElementById('appContent').scrollTop=0;
+}
+
+function resetToUpload(){
+  destroyCh();
+  ['overview','voltage','current','power','impedance','bfg'].forEach(t=>{
+    document.getElementById('tab-'+t).style.display='none';
+  });
+  document.getElementById('newFileBtn').style.display='none';
+  document.getElementById('fileInputDS').value='';
+  document.getElementById('fileInputBFG').value='';
+  G_DS_FILE=null; G_BFG_FILE=null;
+  setDsDropState(null); setBfgDropState(null);
+  showTab('upload');
+}
+
+// ═══════════════════════════════════════════════════════
+// DUAL-FILE STATE
+// ═══════════════════════════════════════════════════════
+let G_DS_FILE=null, G_BFG_FILE=null;
+
+function setDsDropState(file){
+  G_DS_FILE=file;
+  const icon=document.getElementById('dz-ds-icon');
+  const name=document.getElementById('dz-ds-name');
+  const dz=document.getElementById('dz-ds');
+  if(file){
+    icon.textContent='✅';
+    name.textContent=file.name;
+    name.style.color='var(--grn)';
+    dz.style.borderColor='var(--grn)';
+  } else {
+    icon.textContent='📋';
+    name.textContent='No file selected';
+    name.style.color='var(--mut2)';
+    dz.style.borderColor='';
+  }
+  updateAnalyzeBtn();
+}
+function setBfgDropState(file){
+  G_BFG_FILE=file;
+  const icon=document.getElementById('dz-bfg-icon');
+  const name=document.getElementById('dz-bfg-name');
+  const dz=document.getElementById('dz-bfg');
+  if(file){
+    icon.textContent='✅';
+    name.textContent=file.name;
+    name.style.color='var(--ylw)';
+    dz.style.borderColor='var(--ylw)';
+  } else {
+    icon.textContent='🔋';
+    name.textContent='No file selected (optional)';
+    name.style.color='var(--mut2)';
+    dz.style.borderColor='';
+  }
+}
+function updateAnalyzeBtn(){
+  const btn=document.getElementById('analyzeBtn');
+  const hint=document.getElementById('readyHint');
+  if(G_DS_FILE){
+    btn.style.opacity='1'; btn.style.pointerEvents='auto';
+    hint.textContent=G_BFG_FILE?'DS log + BFG data ready':'DS log ready — BFG optional';
+    hint.style.color=G_BFG_FILE?'var(--grn)':'var(--mut2)';
+  } else {
+    btn.style.opacity='0.4'; btn.style.pointerEvents='none';
+    hint.textContent='Select a DS Log file to enable analysis';
+    hint.style.color='var(--mut)';
+  }
+}
+
+// DS drop zone wiring
+document.getElementById('fileInputDS').addEventListener('change',e=>{if(e.target.files[0])setDsDropState(e.target.files[0]);});
+['dragover','dragleave','drop'].forEach(ev=>{
+  const dz=document.getElementById('dz-ds');
+  dz.addEventListener(ev,e=>{
+    e.preventDefault();
+    if(ev==='dragover')dz.classList.add('over');
+    else dz.classList.remove('over');
+    if(ev==='drop'&&e.dataTransfer.files[0])setDsDropState(e.dataTransfer.files[0]);
+  });
+});
+
+// BFG drop zone wiring
+document.getElementById('fileInputBFG').addEventListener('change',e=>{if(e.target.files[0])setBfgDropState(e.target.files[0]);});
+['dragover','dragleave','drop'].forEach(ev=>{
+  const dz=document.getElementById('dz-bfg');
+  dz.addEventListener(ev,e=>{
+    e.preventDefault();
+    if(ev==='dragover')dz.classList.add('over');
+    else dz.classList.remove('over');
+    if(ev==='drop'&&e.dataTransfer.files[0])setBfgDropState(e.dataTransfer.files[0]);
+  });
+});
+
+function startAnalysis(){
+  if(!G_DS_FILE){alert('Please select a DS log file first.');return;}
+  setLoad('Parsing DS log…');
+  parseFile(G_DS_FILE,dsData=>{
+    if(!dsData){
+      setLoad('');
+      alert('Could not parse DS log.\n\nTips:\n• CSV needs a voltage column with values 9–14V\n• Export from DS Log File Viewer → File → Export CSV\n• Raw .dslog works but usually lacks current data');
+      return;
+    }
+    if(G_BFG_FILE){
+      setLoad('Parsing BFG CAN data…');
+      parseBfgFile(G_BFG_FILE,bfgData=>{
+        doAnalyze(dsData,bfgData);
+      });
+    } else {
+      doAnalyze(dsData,null);
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+// DS LOG PARSER  (unchanged from v4 — handles .dslog binary + any CSV/TSV/semicolon)
+// ═══════════════════════════════════════════════════════
+function parseFile(file,cb){
+  const nm=file.name.toLowerCase();
+  if(nm.endsWith('.dslog')||nm.endsWith('.dsevents')){
+    const r=new FileReader();r.onload=e=>cb(parseBinary(new DataView(e.target.result)));r.readAsArrayBuffer(file);
+  } else {
+    const r=new FileReader();r.onload=e=>cb(parseText(e.target.result));r.readAsText(file);
+  }
+}
+function parseBinary(dv){
+  const len=dv.byteLength;
+  for(const stride of[22,20,24,16,32,28]){
+    if(len<stride*20)continue;
+    let samps=[],good=0;
+    for(let off=0;off+stride<=len;off+=stride){
+      try{
+        const cands=[dv.getUint16(off+4,true)/256,dv.getUint16(off+2,true)/256,dv.getUint8(off+4)/10,dv.getUint16(off+6,true)/1000,dv.getUint16(off+4,false)/256];
+        const v=cands.find(c=>c>=6&&c<=14.5);
+        if(v!==undefined){good++;samps.push(v);}
+      }catch(e){}
+    }
+    if(good>len/stride*0.55&&samps.length>50)
+      return samps.map((v,i)=>({t:+(i*0.02).toFixed(3),v:+v.toFixed(4),c:NaN,enabled:true,auto:i<375}));
+  }
+  const found=[];
+  for(let off=0;off+2<=len;off+=2){const v=dv.getUint16(off,true)/1000;if(v>=8&&v<=14)found.push(v);if(found.length>10000)break;}
+  if(found.length>100)return found.map((v,i)=>({t:+(i*0.02).toFixed(3),v:+v.toFixed(4),c:NaN,enabled:true,auto:false}));
+  return null;
+}
+function parseText(raw){
+  const lines=raw.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n').filter(l=>l.trim());
+  if(lines.length<5)return null;
+  const samp=lines.slice(0,6).join('\n');
+  const tc=(samp.match(/\t/g)||[]).length,cc=(samp.match(/,/g)||[]).length,sc=(samp.match(/;/g)||[]).length;
+  const delim=tc>cc&&tc>sc?'\t':sc>cc?';':',';
+  let hIdx=0,hdrs=[];
+  for(let i=0;i<Math.min(8,lines.length);i++){
+    const cols=lines[i].split(delim).map(s=>s.trim().replace(/"/g,''));
+    if(cols.filter(c=>!isNaN(parseFloat(c))&&c!=='').length<cols.length*0.65){hdrs=cols;hIdx=i;break;}
+  }
+  const find=(...kws)=>{for(const kw of kws){const i=hdrs.findIndex(h=>h.toLowerCase().replace(/[^a-z]/g,'').includes(kw.toLowerCase().replace(/[^a-z]/g,'')));if(i!==-1)return i;}return -1;};
+  let iT=find('time','timestamp','elapsed'),iV=find('battery','voltage','volt','batt','vbat'),iI=find('current','amps','amp','curr'),iEn=find('enabled','enable'),iAu=find('auto','autonomous');
+  if(iV===-1){
+    const ncols=(lines[hIdx+1]||lines[0]).split(delim).length;
+    const colS=Array.from({length:ncols},()=>[]);
+    for(let i=hIdx+(hdrs.length?1:0);i<Math.min(hIdx+200,lines.length);i++)
+      lines[i].split(delim).forEach((c,j)=>{const v=parseFloat(c);if(!isNaN(v))colS[j].push(v);});
+    for(let j=0;j<ncols;j++){const s=[...colS[j]].sort((a,b)=>a-b),med=s[Math.floor(s.length/2)];if(med>=9&&med<=13.5&&s[0]>=5){iV=j;if(iT===-1&&j>0)iT=0;break;}}
+  }
+  if(iV===-1)return null;
+  const data=[];
+  for(let i=hIdx+(hdrs.length?1:0);i<lines.length;i++){
+    const cols=lines[i].split(delim).map(s=>s.trim().replace(/"/g,''));
+    const v=parseFloat(cols[iV]);if(isNaN(v)||v<3||v>16)continue;
+    const t=iT!==-1?parseFloat(cols[iT]):data.length*0.02;
+    const c=iI!==-1?parseFloat(cols[iI]):NaN;
+    const en=iEn!==-1?(cols[iEn]==='1'||cols[iEn].toLowerCase()==='true'):true;
+    const au=iAu!==-1?(cols[iAu]==='1'||cols[iAu].toLowerCase()==='true'):false;
+    data.push({t:isNaN(t)?data.length*0.02:t,v,c,enabled:en,auto:au});
+  }
+  return data.length>10?data:null;
+}
+
+// ═══════════════════════════════════════════════════════
+// BFG CAN CSV PARSER
+// ═══════════════════════════════════════════════════════
+// Accepts ANY column layout from WPILib DataLog CSV, Advantage Scope, or
+// custom robot logging. Searches for BFG-specific signals by keyword:
+//
+//   voltage       → "voltage", "busVoltage", "battVoltage", "v"
+//   current       → "current", "amps", "busCurrent", "i"
+//   temperature   → "temp", "temperature", "celsius"
+//   stateOfCharge → "soc", "stateofcharge", "charge%", "chargelevel"
+//   resistance    → "resistance", "internalresistance", "impedance", "mohm"
+//   fullCapacity  → "fullcapacity", "nominalcapacity", "capacity"
+//   remaining     → "remaining", "remainingcapacity", "chargecapacity"
+//   cycleCount    → "cycle", "cyclecount", "cycles"
+//
+// Advantage Scope NetworkTables CSV format is specifically handled:
+// columns are named like "/SmartDashboard/BFG/Voltage" — the parser
+// strips the path prefix and matches on the final segment.
+//
+// WPILib DataLog CSV has a header like:
+//   "Timestamp","Name","Value"   (narrow format)
+// or wide format with one column per signal.
+// Both are detected and handled.
+
+function parseBfgFile(file, cb){
+  const r=new FileReader();
+  r.onload=e=>cb(parseBfgText(e.target.result,file.name));
+  r.readAsText(file);
+}
+
+function parseBfgText(raw, filename){
+  const lines=raw.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n').filter(l=>l.trim());
+  if(lines.length<3) return null;
+
+  // ── Detect delimiter ──────────────────────────────────────────────────
+  const samp=lines.slice(0,6).join('\n');
+  const tc=(samp.match(/\t/g)||[]).length,cc=(samp.match(/,/g)||[]).length,sc=(samp.match(/;/g)||[]).length;
+  const delim=tc>cc&&tc>sc?'\t':sc>cc?';':',';
+
+  const splitLine=l=>l.split(delim).map(s=>s.trim().replace(/"/g,''));
+
+  // ── Detect if this is WPILib DataLog narrow format ────────────────────
+  // Narrow: rows of (timestamp, signal_name, value) — pivot to wide internally
+  const firstDataCols=splitLine(lines[Math.min(1,lines.length-1)]);
+  if(firstDataCols.length===3 && !isNaN(parseFloat(firstDataCols[0]))){
+    return parseBfgNarrow(lines,delim);
+  }
+
+  // ── Wide format: find header row ──────────────────────────────────────
+  let hIdx=0, hdrs=[];
+  for(let i=0;i<Math.min(8,lines.length);i++){
+    const cols=splitLine(lines[i]);
+    if(cols.filter(c=>!isNaN(parseFloat(c))&&c!=='').length < cols.length*0.65){
+      hdrs=cols; hIdx=i; break;
+    }
+  }
+
+  // Normalize header: strip path prefixes like "/SmartDashboard/BFG/"
+  const normHdr=h=>{
+    const parts=h.replace(/\\/g,'/').split('/');
+    return parts[parts.length-1].toLowerCase().replace(/[^a-z0-9]/g,'');
+  };
+  const normHdrs=hdrs.map(normHdr);
+
+  // ── Column finder ─────────────────────────────────────────────────────
+  const findCol=(...kws)=>{
+    for(const kw of kws){
+      const k=kw.toLowerCase().replace(/[^a-z0-9]/g,'');
+      const i=normHdrs.findIndex(h=>h===k||h.includes(k));
+      if(i!==-1)return i;
+    }
+    return -1;
+  };
+
+  const iT   =findCol('time','timestamp','elapsed','t');
+  const iV   =findCol('voltage','busvoltage','battvoltage','batteryvolts','volt');
+  const iI   =findCol('current','amps','buscurrent','batterycurrent','amp');
+  const iTemp=findCol('temperature','temp','celsius','tempC','degc');
+  const iSOC =findCol('soc','stateofcharge','charge','chargelevel','socp');
+  const iR   =findCol('resistance','internalresistance','impedance','mohm','milliohm');
+  const iFC  =findCol('fullcapacity','nominalcapacity','capacity','fullcap','nomcap');
+  const iRC  =findCol('remaining','remainingcapacity','chargecapacity','remcap');
+  const iCC  =findCol('cycle','cyclecount','cycles','cyclecount');
+
+  // ── If no BFG-recognizable column at all, try value-range detection ──
+  // SOC 0–100, temp 0–80, R 0–200 are all distinct enough to auto-detect
+  if(iV===-1 && iSOC===-1 && iTemp===-1 && iR===-1){
+    return parseBfgByValueRange(lines,hIdx,delim,splitLine);
+  }
+
+  // ── Parse rows ────────────────────────────────────────────────────────
+  const data=[];
+  const dataStart=hIdx+(hdrs.length?1:0);
+  for(let i=dataStart;i<lines.length;i++){
+    const cols=splitLine(lines[i]);
+    const fv=idx=>idx!==-1&&idx<cols.length?parseFloat(cols[idx]):NaN;
+    const t=iT!==-1?fv(iT):data.length*0.02;
+    const row={
+      t:isNaN(t)?data.length*0.02:t,
+      v:fv(iV), c:fv(iI), temp:fv(iTemp),
+      soc:fv(iSOC), r:fv(iR), fullCap:fv(iFC),
+      remCap:fv(iRC), cycles:fv(iCC)
+    };
+    // Require at least one valid BFG field
+    const hasData=[row.v,row.c,row.temp,row.soc,row.r].some(x=>!isNaN(x)&&isFinite(x));
+    if(hasData) data.push(row);
+  }
+
+  return data.length>3 ? data : null;
+}
+
+// WPILib DataLog narrow (timestamp, name, value) pivot
+function parseBfgNarrow(lines, delim){
+  const splitLine=l=>l.split(delim).map(s=>s.trim().replace(/"/g,''));
+  // Build map: timestamp → {signalName: value}
+  const timeMap={};
+  for(const line of lines){
+    const cols=splitLine(line);
+    if(cols.length<3)continue;
+    const t=parseFloat(cols[0]);
+    if(isNaN(t))continue;
+    const sig=cols[1].toLowerCase().replace(/[^a-z0-9]/g,'');
+    const val=parseFloat(cols[2]);
+    if(!isNaN(val)){
+      if(!timeMap[t])timeMap[t]={t};
+      timeMap[t][sig]=val;
+    }
+  }
+  const rows=Object.values(timeMap).sort((a,b)=>a.t-b.t);
+  // Map signal names → BFG fields
+  const bfgRows=rows.map(row=>{
+    const get=(...kws)=>{for(const kw of kws){const k=kw.toLowerCase().replace(/[^a-z0-9]/g,'');const hit=Object.keys(row).find(k2=>k2.includes(k));if(hit)return row[hit];}return NaN;};
+    return{t:row.t,
+      v:get('voltage','busvoltage','battvoltage'),
+      c:get('current','buscurrent','batterycurrent'),
+      temp:get('temperature','temp','celsius'),
+      soc:get('soc','stateofcharge','charge'),
+      r:get('resistance','internalresistance','impedance'),
+      fullCap:get('fullcapacity','nominalcapacity','capacity'),
+      remCap:get('remaining','remainingcapacity'),
+      cycles:get('cycle','cyclecount')};
+  });
+  return bfgRows.filter(r=>[r.v,r.c,r.temp,r.soc,r.r].some(x=>!isNaN(x)&&isFinite(x)));
+}
+
+// Last-resort: detect BFG columns purely by value range
+// SOC: 0–100 %, temp: -20–80 °C, R: 1–200 mΩ, voltage: 6–14.5 V
+function parseBfgByValueRange(lines, hIdx, delim, splitLine){
+  const dataStart=hIdx+1;
+  const ncols=splitLine(lines[Math.min(dataStart,lines.length-1)]).length;
+  const colSamples=Array.from({length:ncols},()=>[]);
+  for(let i=dataStart;i<Math.min(dataStart+300,lines.length);i++){
+    splitLine(lines[i]).forEach((c,j)=>{const v=parseFloat(c);if(!isNaN(v))colSamples[j].push(v);});
+  }
+  const med=(arr)=>{const s=[...arr].sort((a,b)=>a-b);return s[Math.floor(s.length/2)];};
+  const inRange=(arr,lo,hi)=>arr.length>5&&arr[0]>=lo-5&&arr[arr.length-1]<=hi+5;
+
+  let iT=-1,iV=-1,iI=-1,iTemp=-1,iSOC=-1,iR=-1;
+  colSamples.forEach((col,j)=>{
+    const s=[...col].sort((a,b)=>a-b),m=med(col);
+    if(iT===-1&&j===0&&s[0]>=0&&m>1)iT=j;
+    if(iV===-1&&m>=9&&m<=13.5&&s[0]>=5)iV=j;
+    if(iI===-1&&m>0&&m<300&&inRange(s,-5,400))iI=j;
+    if(iSOC===-1&&m>=0&&m<=100&&s[0]>=0&&s[s.length-1]<=100)iSOC=j;
+    if(iTemp===-1&&m>=0&&m<=80&&inRange(s,-20,90))iTemp=j;
+    if(iR===-1&&m>=1&&m<=200&&inRange(s,0,500))iR=j;
+  });
+  if(iV===-1&&iSOC===-1&&iTemp===-1&&iR===-1)return null;
+  const data=[];
+  for(let i=dataStart;i<lines.length;i++){
+    const cols=splitLine(lines[i]);
+    const fv=idx=>idx!==-1&&idx<cols.length?parseFloat(cols[idx]):NaN;
+    data.push({t:iT!==-1?fv(iT):data.length*0.02,v:fv(iV),c:fv(iI),temp:fv(iTemp),soc:fv(iSOC),r:fv(iR),fullCap:NaN,remCap:NaN,cycles:NaN});
+  }
+  return data.filter(r=>[r.v,r.c,r.temp,r.soc,r.r].some(x=>!isNaN(x)&&isFinite(x)));
+}
+
+// ═══════════════════════════════════════════════════════
+// DEMO DATA
+// ═══════════════════════════════════════════════════════
+function loadDemo(){
+  const data=[];let soc=0.92,t=0;
+  const push=(en,au,load)=>{
+    const imp=0.012+(1-soc)*0.030+(Math.random()-0.5)*0.004;
+    const v=Math.max(6.1,12.6*soc-load*imp+(Math.random()-0.5)*0.07);
+    data.push({t:+t.toFixed(3),v:+v.toFixed(4),c:+Math.max(0,load).toFixed(2),enabled:en,auto:au});
+    soc-=load*1e-7;t+=0.02;
+  };
+  for(let i=0;i<250;i++)push(false,false,6+Math.random()*4);
+  for(let i=0;i<750;i++){const l=75+Math.sin(i*0.2)*40+(Math.random()<0.08?140:0)+Math.random()*10;push(true,true,l);}
+  for(let i=0;i<6750;i++){const sp=Math.random()<0.05?155+Math.random()*65:0;const l=52+Math.sin(i*0.055)*35+Math.sin(i*0.22)*18+sp+Math.random()*12;push(true,false,l);}
+  for(let i=0;i<250;i++)push(false,false,5+Math.random()*3);
+  // Synthetic BFG data
+  const bfg=[];let bsoc=91,btemp=22,bR=14,t2=0;
+  for(let i=0;i<data.length;i+=5){
+    const d=data[i];
+    bsoc=Math.max(10,bsoc-(isNaN(d.c)?0:d.c)*0.0001);
+    btemp=Math.min(50,btemp+(i>1000?0.003:0.0005));
+    bR=Math.min(40,bR+(1-bsoc/100)*0.002+btemp*0.005+(Math.random()-0.5)*0.3);
+    bfg.push({t:t2,v:d.v+(Math.random()-0.5)*0.02,c:isNaN(d.c)?0:d.c,temp:+btemp.toFixed(1),soc:+bsoc.toFixed(1),r:+bR.toFixed(2),fullCap:18.0,remCap:+(18*bsoc/100).toFixed(2),cycles:47});
+    t2+=0.1;
+  }
+  doAnalyze(data,bfg);
+}
+
+// ═══════════════════════════════════════════════════════
+// ROLLING UTILITIES
+// ═══════════════════════════════════════════════════════
+const roll=(arr,w,fn)=>{const out=new Float32Array(arr.length);for(let i=0;i<arr.length;i++){const win=[];for(let j=Math.max(0,i-w+1);j<=i;j++)win.push(arr[j]);out[i]=fn(win);}return out;};
+const rMin=(arr,w)=>roll(arr,w,a=>Math.min(...a));
+const rMax=(arr,w)=>roll(arr,w,a=>Math.max(...a));
+const rMean=(arr,w)=>{const out=new Float32Array(arr.length);let s=0,c=0;for(let i=0;i<arr.length;i++){s+=arr[i];c++;if(i>=w){s-=arr[i-w];c--;}out[i]=s/c;}return out;};
+const rMed=(arr,w)=>roll(arr,w,a=>{const s=[...a].sort((x,y)=>x-y);return s[Math.floor(s.length/2)];});
+function ds(arr,max){const step=Math.max(1,Math.floor(arr.length/max));const out=[];for(let i=0;i<arr.length;i+=step)out.push(arr[i]);return out;}
+function pct(sorted,p){return sorted.length?sorted[Math.floor(sorted.length*p)]:NaN;}
+
+// ═══════════════════════════════════════════════════════
+// ANALYSIS
+// ═══════════════════════════════════════════════════════
+let G_DATA=null;
+function doAnalyze(raw,bfgData){
+  G_DATA=raw;
+  setLoad('Analyzing…');
+  document.getElementById('page-upload').style.display='block';
+  setTimeout(()=>{
+    const n=raw.length;
+    const times=raw.map(d=>d.t),volts=raw.map(d=>d.v),currents=raw.map(d=>d.c);
+    const hasCurr=raw.filter(d=>!isNaN(d.c)&&d.c>0).length>n*0.2;
+    const dt=n>1?(times[n-1]-times[0])/(n-1):0.02;
+
+    // OCV
+    const topV=[...volts].sort((a,b)=>b-a).slice(0,Math.max(3,Math.floor(n*0.03)));
+    const ocv=topV.reduce((a,b)=>a+b)/topV.length;
+
+    // Rolling arrays
+    const vArr=new Float32Array(volts);
+    const wv01=Math.max(1,Math.round(0.1/dt));
+    const wv5 =Math.max(1,Math.round(5.0/dt));
+    const wi01=Math.max(1,Math.round(0.1/dt));
+    const wi1 =Math.max(1,Math.round(1.0/dt));
+    const wi5 =Math.max(1,Math.round(5.0/dt));
+    const wr05=Math.max(1,Math.round(0.5/dt));
+    const wr2 =Math.max(1,Math.round(2.0/dt));
+
+    const rollVMin01=rMin(vArr,wv01);
+    const rollVMean5=rMean(vArr,wv5);
+
+    let cArr=null,rollCMean01=null,rollCMean5=null,rollCMax1=null;
+    let powArr=null,rollPMean1=null,rollPMean5=null,cumEn=null;
+    let impArr=[],sortR=[],scPts=[];
+    let rollImpMed05=null,rollImpMed2=null;
+
+    if(hasCurr){
+      cArr=new Float32Array(currents.map(v=>isNaN(v)?0:Math.max(0,v)));
+      rollCMean01=rMean(cArr,wi01);
+      rollCMean5 =rMean(cArr,wi5);
+      rollCMax1  =rMax(cArr,wi1);
+
+      powArr=new Float32Array(n);
+      for(let i=0;i<n;i++)powArr[i]=Math.max(0,volts[i]*(isNaN(currents[i])?0:Math.max(0,currents[i])));
+      rollPMean1=rMean(powArr,wi1);
+      rollPMean5=rMean(powArr,wi5);
+      cumEn=new Float32Array(n);let eSum=0;
+      for(let i=0;i<n;i++){eSum+=powArr[i]*dt/3600;cumEn[i]=eSum;}
+
+      // Impedance
+      for(let i=0;i<n;i++){
+        const c=currents[i];if(isNaN(c)||c<15)continue;
+        const sag=Math.max(0,ocv-volts[i]);
+        const R=sag/c;
+        if(R>0&&R<0.15){impArr.push({t:times[i],R,sag,c,v:volts[i]});}
+        if(i%4===0&&R>0&&R<0.15)scPts.push({x:+c.toFixed(1),y:+sag.toFixed(4)});
+      }
+      sortR=[...impArr.map(s=>s.R)].sort((a,b)=>a-b);
+      if(impArr.length>0){
+        const impRaw=new Float32Array(impArr.map(s=>s.R*1000));
+        rollImpMed05=rMed(impRaw,wr05);
+        rollImpMed2 =rMed(impRaw,wr2);
+      }
+    }
+
+    // Voltage stats
+    const BROW=6.3,CRIT=7.5,WARN=8.5;
+    const vMin=Math.min(...volts),vMax=Math.max(...volts),vMean=volts.reduce((a,b)=>a+b)/n;
+    const nBrow=volts.filter(v=>v<BROW).length,nCrit=volts.filter(v=>v<CRIT).length,nWarn=volts.filter(v=>v<WARN).length;
+    const tBrow=nBrow*dt,tCrit=nCrit*dt,tWarn=nWarn*dt;
+    const pCrit=nCrit/n*100;
+
+    // Brownout events
+    const browEvts=[];let inE=false,eStart=0,eMinV=99;
+    for(let i=0;i<n;i++){
+      if(volts[i]<CRIT&&!inE){inE=true;eStart=times[i];eMinV=volts[i];}
+      else if(volts[i]<CRIT&&inE){eMinV=Math.min(eMinV,volts[i]);}
+      else if(volts[i]>=CRIT&&inE){browEvts.push({t:eStart,minV:eMinV,dur:times[i]-eStart,phase:raw[i]?.auto?'Auto':raw[i]?.enabled?'Teleop':'Disabled'});inE=false;eMinV=99;}
+    }
+    browEvts.sort((a,b)=>a.minV-b.minV);
+
+    // Current stats
+    let cMax=NaN,cMean=NaN,cP90=NaN,cP99=NaN,nOver120=0,nOver160=0,peakEvts=[];
+    if(hasCurr){
+      const cs=raw.filter(d=>!isNaN(d.c)&&d.c>0).map(d=>d.c);
+      const sc2=[...cs].sort((a,b)=>a-b);
+      cMax=Math.max(...cs);cMean=cs.reduce((a,b)=>a+b)/cs.length;
+      cP90=pct(sc2,0.9);cP99=pct(sc2,0.99);
+      nOver120=cs.filter(c=>c>120).length;nOver160=cs.filter(c=>c>160).length;
+      for(let i=1;i<n-1;i++){if(!isNaN(currents[i])&&currents[i]>currents[i-1]&&currents[i]>currents[i+1<n?i+1:i]&&currents[i]>80)peakEvts.push({t:times[i],c:currents[i],v:volts[i],sag:+(ocv-volts[i]).toFixed(4)});}
+      peakEvts.sort((a,b)=>b.c-a.c);
+    }
+
+    // Power stats
+    let pMax=NaN,pMean=NaN,totalWh=NaN;
+    if(powArr){const pa=[...powArr];pMax=Math.max(...pa);pMean=pa.reduce((a,b)=>a+b)/pa.length;totalWh=cumEn[n-1];}
+
+    // Impedance stats
+    const medR=pct(sortR,0.5),p10=pct(sortR,0.1),p90=pct(sortR,0.9),p97=pct(sortR,0.97);
+    let slope=NaN;
+    if(scPts.length>10){const sn=scPts.length,sx=scPts.reduce((a,p)=>a+p.x,0),sy=scPts.reduce((a,p)=>a+p.y,0),sxx=scPts.reduce((a,p)=>a+p.x*p.x,0),sxy=scPts.reduce((a,p)=>a+p.x*p.y,0);slope=(sn*sxy-sx*sy)/(sn*sxx-sx*sx);}
+
+    // SOC
+    const socFn=v=>Math.min(100,Math.max(0,(v-10.5)/(12.8-10.5)*100));
+    const firstV=[...raw.slice(0,200).map(d=>d.v)].sort((a,b)=>b-a);
+    const lastV=[...raw.slice(-200).map(d=>d.v)].sort((a,b)=>b-a);
+    const socS=socFn(firstV.slice(0,5).reduce((a,b)=>a+b)/5);
+    const socE=socFn(lastV.slice(0,5).reduce((a,b)=>a+b)/5);
+
+    // Health score
+    let score=100;
+    if(!isNaN(medR)){if(medR>0.035)score-=28;else if(medR>0.025)score-=15;else if(medR>0.018)score-=7;}
+    if(pCrit>5)score-=24;else if(pCrit>1)score-=11;
+    if(nWarn/n*100>15)score-=18;else if(nWarn/n*100>5)score-=7;
+    if(socE<30)score-=14;else if(socE<50)score-=5;
+    if(!isNaN(p90)&&!isNaN(medR)&&medR>0&&p90/medR>3.5)score-=9;
+    score=Math.max(0,Math.min(100,Math.round(score)));
+
+    // Phase data
+    const phases=[
+      {lbl:'Disabled',arr:raw.filter(d=>!d.enabled)},
+      {lbl:'Auto',arr:raw.filter(d=>d.enabled&&d.auto)},
+      {lbl:'Teleop',arr:raw.filter(d=>d.enabled&&!d.auto)},
+    ].filter(p=>p.arr.length>0).map(p=>{
+      const vs=p.arr.map(d=>d.v),cs=p.arr.filter(d=>!isNaN(d.c)).map(d=>d.c),pw=p.arr.map(d=>isNaN(d.c)?0:Math.max(0,d.v*d.c));
+      return{lbl:p.lbl,vMin:Math.min(...vs),vMean:vs.reduce((a,b)=>a+b)/vs.length,vMax:Math.max(...vs),cMean:cs.length?cs.reduce((a,b)=>a+b)/cs.length:0,pMean:pw.reduce((a,b)=>a+b)/pw.length};
+    });
+
+    // ── Impedance percentile buckets (10s buckets) ──
+    const bucketSz=Math.max(1,Math.round(10/dt));
+    const iBuckets=[];
+    for(let i=0;i<n;i+=bucketSz){
+      const end=Math.min(n,i+bucketSz);
+      const rs=[];
+      for(let j=i;j<end;j++){if(!isNaN(currents[j])&&currents[j]>15){const sag=Math.max(0,ocv-volts[j]),R=sag/currents[j];if(R>0&&R<0.15)rs.push(R*1000);}}
+      if(rs.length>3){rs.sort((a,b)=>a-b);iBuckets.push({t:times[i],p10:pct(rs,0.1),p50:pct(rs,0.5),p90:pct(rs,0.9)});}
+    }
+
+    // Spike factor over time
+    const spikeArr=impArr.length>0&&rollImpMed05?impArr.map((s,i)=>({t:s.t,spk:rollImpMed05[i]>0?s.R*1000/rollImpMed05[i]:0})):[];
+
+    // ═════ RENDER ════════════════════════════════════
+    destroyCh();
+    setLoad('');
+    document.getElementById('page-upload').style.display='none';
+    document.getElementById('loadBar').style.display='none';
+    ['overview','voltage','current','power','impedance'].forEach(t=>{
+      document.getElementById('tab-'+t).style.display='';
+    });
+    // BFG tab — show only if BFG data present
+    document.getElementById('tab-bfg').style.display = bfgData&&bfgData.length>3 ? '' : 'none';
+    document.getElementById('newFileBtn').style.display='flex';
+
+    // Update badges
+    document.getElementById('badge-overview').textContent=`${score}/100`;
+    document.getElementById('badge-voltage').textContent=`min ${vMin.toFixed(2)}V`;
+    document.getElementById('badge-current').textContent=hasCurr?`peak ${cMax.toFixed(0)}A`:'no data';
+    document.getElementById('badge-power').textContent=hasCurr?`${totalWh.toFixed(1)}Wh`:'no data';
+    document.getElementById('badge-impedance').textContent=hasCurr&&!isNaN(medR)?`${(medR*1000).toFixed(1)}mΩ`:'no data';
+    document.getElementById('badge-bfg').textContent=bfgData&&bfgData.length>3?`${bfgData.length} rows`:'—';
+
+    renderOverview({score,medR,vMin,pCrit,socE,p90,hasCurr,times,volts,currents,powArr,rollPMean1,phases,dt,ocv});
+    renderVoltage({times,volts,rollVMin01,rollVMean5,vMin,vMax,vMean,ocv,tBrow,tCrit,tWarn,nBrow,nCrit,nWarn,BROW,CRIT,WARN,browEvts,socS,socE,dt});
+    renderCurrent({hasCurr,times,currents,cArr,rollCMean01,rollCMean5,rollCMax1,cMax,cMean,cP90,cP99,nOver120,nOver160,peakEvts,volts,dt});
+    renderPower({hasCurr,times,powArr,rollPMean1,rollPMean5,cumEn,pMax,pMean,totalWh,socE,socS,volts,dt,n,ocv});
+    renderImpedance({hasCurr,impArr,sortR,scPts,slope,medR,p10,p90,p97,rollImpMed05,rollImpMed2,spikeArr,iBuckets,ocv});
+    renderBfg(bfgData,impArr,times);
+
+    showTab('overview');
+  },60);
+}
+
+// ═══════════════════════════════════════════════════════
+// CHART ENGINE
+// ═══════════════════════════════════════════════════════
+let CH={};
+function destroyCh(){Object.values(CH).forEach(c=>c&&c.destroy());CH={};}
+const MO={responsive:true,maintainAspectRatio:false,animation:false};
+const TX={color:'#47506a',font:{family:'IBM Plex Mono',size:10}};
+const GR={color:'rgba(255,255,255,0.04)'};
+const AX={ticks:TX,grid:GR};
+const AXNG={ticks:TX,grid:{display:false}};
+
+function hLine(chart,yVal,scId,color,label,pos='right'){
+  const sc=chart.scales[scId];if(!sc)return;
+  const ca=chart.chartArea,ctx=chart.ctx,y=sc.getPixelForValue(yVal);
+  if(y<ca.top||y>ca.bottom)return;
+  ctx.save();ctx.beginPath();ctx.strokeStyle=color;ctx.lineWidth=1;ctx.setLineDash([4,4]);
+  ctx.moveTo(ca.left,y);ctx.lineTo(ca.right,y);ctx.stroke();
+  ctx.font='9px IBM Plex Mono';ctx.fillStyle=color;
+  ctx.textAlign=pos==='right'?'right':'left';
+  ctx.fillText(label,pos==='right'?ca.right-4:ca.left+4,y-3);
+  ctx.restore();
+}
+function linePlugin(...lines){return{afterDraw(chart){lines.forEach(l=>hLine(chart,l.y,l.sc,l.col,l.lbl,l.pos));}};}
+
+function mkLine(id,labels,datasets,scales,plugins=[]){
+  return new Chart(document.getElementById(id),{data:{labels,datasets},options:{...MO,plugins:{legend:{display:false}},scales},plugins});
+}
+
+// ═══════════════════════════════════════════════════════
+// STAT CARD HTML
+// ═══════════════════════════════════════════════════════
+function SC(l,v,u,n,c){return`<div class="sc ${c}"><div class="sl">${l}</div><div class="sv">${v}<span class="su">${u}</span></div><div class="sn">${n}</div></div>`;}
+
+// ═══════════════════════════════════════════════════════
+// RENDER OVERVIEW
+// ═══════════════════════════════════════════════════════
+function renderOverview({score,medR,vMin,pCrit,socE,p90,hasCurr,times,volts,currents,powArr,rollPMean1,phases,dt,ocv}){
+  const col=score>=75?'var(--grn)':score>=50?'var(--ylw)':'var(--red)';
+  const lbl=score>=75?'Battery healthy — competition ready':score>=50?'Showing wear — monitor carefully':'Degraded — replace before competition';
+  const impStr=!hasCurr?'No current data.':isNaN(medR)?'R not computed.':`Median R = <strong>${(medR*1000).toFixed(1)} mΩ</strong> (${medR<0.015?'excellent':medR<0.022?'good':medR<0.030?'moderate':medR<0.040?'high':'critical'}).`;
+  const spk=(!isNaN(p90)&&!isNaN(medR)&&medR>0)?` Spike factor <strong>${(p90/medR).toFixed(1)}×</strong>.`:'';
+  const brow=pCrit<0.5?'No critical sag.':`Below 7.5V for <strong>${pCrit.toFixed(2)}%</strong> of match.`;
+  document.getElementById('verdEl').innerHTML=`
+  <div class="verdict" style="--vc:${col}">
+    <div><div class="v-score">${score}</div><div class="v-sub">Health / 100</div></div>
+    <div><div class="v-label">${lbl}</div>
+    <div class="v-body">${impStr}${spk} ${brow} Min voltage: <strong>${vMin.toFixed(3)} V</strong>. SOC end: <strong>${socE.toFixed(0)}%</strong>.</div></div>
+  </div>`;
+
+  const socFn=v=>Math.min(100,Math.max(0,(v-10.5)/(12.8-10.5)*100));
+  const n=times.length,vMean=volts.reduce((a,b)=>a+b)/n;
+  const cMean=hasCurr?currents.filter(c=>!isNaN(c)&&c>0).reduce((a,b)=>a+b,0)/currents.filter(c=>!isNaN(c)&&c>0).length:NaN;
+  const pMean=powArr?[...powArr].reduce((a,b)=>a+b)/n:NaN;
+  const totalWh=powArr?[...powArr].reduce((a,b)=>a+b)*dt/3600:NaN;
+  const socS=socFn([...volts].sort((a,b)=>b-a).slice(0,5).reduce((a,b)=>a+b)/5);
+
+  document.getElementById('overviewGrid').innerHTML=
+    SC('Health score',score,'/100','Composite battery health',score>=75?'g':score>=50?'y':'r')+
+    SC('Min voltage',vMin.toFixed(3),'V','Lowest instantaneous reading',vMin>=8.5?'g':vMin>=7.5?'y':'r')+
+    SC('Mean voltage',vMean.toFixed(3),'V','Average across log',vMean>=11?'g':vMean>=10?'y':'r')+
+    SC('SOC start→end',`${socS.toFixed(0)}→${socE.toFixed(0)})`,'%','State of charge change',socE>=50?'g':socE>=30?'y':'r')+
+    (hasCurr?SC('Peak current',currents.filter(c=>!isNaN(c)).reduce((a,b)=>Math.max(a,b),0).toFixed(0),'A','Highest instantaneous sample',currents.filter(c=>!isNaN(c)).reduce((a,b)=>Math.max(a,b),0)<120?'g':'r'):'')+ 
+    (hasCurr?SC('Mean current',cMean.toFixed(1),'A','Average demand',cMean<60?'g':cMean<90?'y':'r'):'')+
+    (hasCurr?SC('Total energy',totalWh.toFixed(2),'Wh','Energy used this match',totalWh<108?'g':totalWh<151?'y':'r'):'')+
+    (hasCurr&&!isNaN(medR)?SC('Median R',(medR*1000).toFixed(1),'mΩ','Internal resistance',medR<=0.018?'g':medR<=0.028?'y':'r'):'');
+
+  // Overview chart — voltage + current + power
+  const step=Math.max(1,Math.floor(n/800));
+  const dT=[],dV=[],dC=[],dP=[];
+  for(let i=0;i<n;i+=step){
+    dT.push(+times[i].toFixed(2));dV.push(+volts[i].toFixed(4));
+    dC.push(hasCurr&&!isNaN(currents[i])?+Math.max(0,currents[i]).toFixed(1):null);
+    dP.push(powArr?+powArr[i].toFixed(0):null);
+  }
+  CH.overview=new Chart(document.getElementById('cOverview'),{
+    data:{labels:dT,datasets:[
+      {type:'line',label:'Voltage',data:dV,borderColor:'#00dfa0',borderWidth:1.5,pointRadius:0,yAxisID:'yV',fill:false,tension:0.05,order:1},
+      ...(hasCurr?[{type:'line',label:'Current',data:dC,borderColor:'rgba(61,143,255,0.7)',borderWidth:1,pointRadius:0,yAxisID:'yC',fill:false,tension:0.05,borderDash:[3,3],order:2}]:[]),
+      ...(powArr?[{type:'line',label:'Power',data:dP,borderColor:'rgba(167,139,250,0.6)',borderWidth:1,pointRadius:0,yAxisID:'yC',fill:false,tension:0.05,borderDash:[6,3],order:3}]:[]),
+    ]},
+    options:{...MO,plugins:{legend:{display:false}},
+      scales:{
+        x:{...AX,ticks:{...TX,maxTicksLimit:12}},
+        yV:{position:'left',...AX,ticks:{...TX,color:'#00dfa0'},title:{display:true,text:'V',color:'#00dfa0',font:{size:10,family:'IBM Plex Mono'}}},
+        ...(hasCurr||powArr?{yC:{position:'right',ticks:{...TX,color:'#6e778f'},grid:{display:false},title:{display:true,text:'A / W',color:'#6e778f',font:{size:10,family:'IBM Plex Mono'}}}}:{})
+      }},
+    plugins:[linePlugin({y:6.3,sc:'yV',col:'rgba(255,64,64,0.5)',lbl:'6.3V'},{y:8.5,sc:'yV',col:'rgba(255,110,26,0.4)',lbl:'8.5V'})]
+  });
+
+  // Phase comparison — voltage
+  const pLabels=phases.map(p=>p.lbl);
+  CH.phaseV=new Chart(document.getElementById('cPhaseV'),{
+    type:'bar',
+    data:{labels:pLabels,datasets:[
+      {label:'Min V',data:phases.map(p=>+p.vMin.toFixed(3)),backgroundColor:'rgba(255,64,64,0.7)',borderRadius:3,borderWidth:0},
+      {label:'Mean V',data:phases.map(p=>+p.vMean.toFixed(3)),backgroundColor:'rgba(0,223,160,0.6)',borderRadius:3,borderWidth:0},
+      {label:'Max V',data:phases.map(p=>+p.vMax.toFixed(3)),backgroundColor:'rgba(61,143,255,0.5)',borderRadius:3,borderWidth:0},
+    ]},
+    options:{...MO,plugins:{legend:{display:true,labels:{color:'#6a7490',font:{size:10,family:'IBM Plex Mono'},boxWidth:10}}},
+      scales:{x:AXNG,y:{...AX,min:Math.max(0,phases.reduce((a,p)=>Math.min(a,p.vMin),99)-1)}}}
+  });
+
+  // Phase comparison — current + power
+  CH.phaseCP=new Chart(document.getElementById('cPhaseCP'),{
+    type:'bar',
+    data:{labels:pLabels,datasets:[
+      {label:'Mean A',data:phases.map(p=>+p.cMean.toFixed(1)),backgroundColor:'rgba(61,143,255,0.65)',borderRadius:3,borderWidth:0,yAxisID:'yA'},
+      {label:'Mean W',data:phases.map(p=>+(p.pMean||0).toFixed(0)),backgroundColor:'rgba(167,139,250,0.55)',borderRadius:3,borderWidth:0,yAxisID:'yW'},
+    ]},
+    options:{...MO,plugins:{legend:{display:true,labels:{color:'#6a7490',font:{size:10,family:'IBM Plex Mono'},boxWidth:10}}},
+      scales:{
+        x:AXNG,
+        yA:{position:'left',...AX,ticks:{...TX,color:'#3d8fff'},title:{display:true,text:'A',color:'#3d8fff',font:{size:10,family:'IBM Plex Mono'}}},
+        yW:{position:'right',ticks:{...TX,color:'#a78bfa'},grid:{display:false},title:{display:true,text:'W',color:'#a78bfa',font:{size:10,family:'IBM Plex Mono'}}}
+      }}
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+// RENDER VOLTAGE
+// ═══════════════════════════════════════════════════════
+function renderVoltage({times,volts,rollVMin01,rollVMean5,vMin,vMax,vMean,ocv,tBrow,tCrit,tWarn,nBrow,nCrit,nWarn,BROW,CRIT,WARN,browEvts,socS,socE,dt}){
+  const n=volts.length;
+  document.getElementById('vStatBadge').textContent=`min ${vMin.toFixed(3)} V`;
+  const wc=v=>v<CRIT?'r':v<WARN?'y':'g';
+  document.getElementById('vGrid').innerHTML=
+    SC('Min voltage',vMin.toFixed(3),'V','Lowest single sample',wc(vMin))+
+    SC('OCV estimate',ocv.toFixed(3),'V','Top-3% sample average','b')+
+    SC('Mean voltage',vMean.toFixed(3),'V','Average across full log',vMean>=11?'g':vMean>=10?'y':'r')+
+    SC('< 8.5V time',(nWarn/n*100).toFixed(2),'%',`${tWarn.toFixed(1)}s — torque loss zone`,nWarn/n*100<3?'g':nWarn/n*100<10?'y':'r')+
+    SC('< 7.5V time',(nCrit/n*100).toFixed(2),'%',`${tCrit.toFixed(1)}s — CAN faults`,nCrit/n*100<0.5?'g':nCrit/n*100<3?'y':'r')+
+    SC('< 6.3V time',(nBrow/n*100).toFixed(2),'%',`${tBrow.toFixed(2)}s — radio brownout`,nBrow===0?'g':'r')+
+    SC('Brownout events',browEvts.length,'','Contiguous spans below 7.5V',browEvts.length===0?'g':browEvts.length<3?'y':'r')+
+    SC('SOC start',socS.toFixed(0),'%','Estimated start charge',socS>=80?'g':socS>=60?'y':'r')+
+    SC('SOC end',socE.toFixed(0),'%','Estimated end charge',socE>=50?'g':socE>=30?'y':'r');
+
+  const step=Math.max(1,Math.floor(n/900));
+  const dT=[],dVr=[],dVm=[],dVt=[];
+  for(let i=0;i<n;i+=step){dT.push(+times[i].toFixed(2));dVr.push(+volts[i].toFixed(4));dVm.push(+rollVMin01[i].toFixed(4));dVt.push(+rollVMean5[i].toFixed(4));}
+  const segCol=ctx=>{const v=dVm[ctx.p1DataIndex];return v<BROW?'#ff4040':v<CRIT?'rgba(255,64,64,0.8)':v<WARN?'#ff6e1a':'#00dfa0';};
+
+  // Main trace
+  CH.vMain=new Chart(document.getElementById('cVoltMain'),{
+    data:{labels:dT,datasets:[
+      {type:'line',data:dVr,borderColor:'rgba(0,223,160,0.2)',borderWidth:0.8,pointRadius:0,yAxisID:'yV',fill:false,tension:0.05,order:2},
+      {type:'line',data:dVm,borderColor:'#00dfa0',borderWidth:2,pointRadius:0,yAxisID:'yV',fill:false,tension:0,order:1,segment:{borderColor:segCol}},
+    ]},
+    options:{...MO,plugins:{legend:{display:false}},scales:{x:{...AX,ticks:{...TX,maxTicksLimit:12}},yV:{...AX,ticks:{...TX,color:'#00dfa0'},title:{display:true,text:'V',color:'#00dfa0',font:{size:10,family:'IBM Plex Mono'}}}}},
+    plugins:[linePlugin({y:BROW,sc:'yV',col:'rgba(255,64,64,0.6)',lbl:'6.3V radio'},{y:WARN,sc:'yV',col:'rgba(255,110,26,0.5)',lbl:'8.5V motors'})]
+  });
+
+  // Histogram
+  const vBins=32,vLo=Math.max(4,Math.floor(vMin*10)/10-0.1),vHi=Math.min(14,Math.ceil(vMax*10)/10+0.1),vSt=(vHi-vLo)/vBins;
+  const vCnt=Array(vBins).fill(0),vLbl=[];
+  for(let i=0;i<vBins;i++)vLbl.push((vLo+i*vSt).toFixed(2));
+  volts.forEach(v=>{const b=Math.min(vBins-1,Math.floor((v-vLo)/vSt));if(b>=0)vCnt[b]++;});
+  const vCol=vLbl.map(l=>{const v=parseFloat(l);return v<BROW?'rgba(255,64,64,0.8)':v<8.5?'rgba(255,110,26,0.7)':'rgba(0,223,160,0.55)';});
+  CH.vHist=new Chart(document.getElementById('cVHist'),{type:'bar',data:{labels:vLbl,datasets:[{data:vCnt,backgroundColor:vCol,borderWidth:0}]},
+    options:{...MO,plugins:{legend:{display:false}},scales:{x:{...AXNG,ticks:{...TX,maxTicksLimit:7},title:{display:true,text:'V',color:'#47506a',font:{size:10,family:'IBM Plex Mono'}}},y:AX}}});
+
+  // Threshold bars
+  CH.vThresh=new Chart(document.getElementById('cVThresh'),{type:'bar',
+    data:{labels:['< 8.5V','< 7.5V','< 6.3V'],datasets:[{data:[tWarn,tCrit,tBrow],backgroundColor:['rgba(255,110,26,0.7)','rgba(255,64,64,0.7)','rgba(255,64,64,0.9)'],borderWidth:0,borderRadius:3}]},
+    options:{...MO,indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${(+c.raw).toFixed(2)} s`}}},
+      scales:{x:{...AX,title:{display:true,text:'seconds',color:'#47506a',font:{size:10,family:'IBM Plex Mono'}}},y:{ticks:{color:'#6a7490',font:{family:'IBM Plex Mono',size:10}},grid:{display:false}}}}});
+
+  // Rolling min bar chart
+  const rmStep=Math.max(1,Math.floor(n/600)),rmT=[],rmV=[],rmC=[];
+  for(let i=0;i<n;i+=rmStep){rmT.push(+times[i].toFixed(2));const v=+rollVMin01[i].toFixed(4);rmV.push(v);rmC.push(v<BROW?'rgba(255,64,64,0.9)':v<CRIT?'rgba(255,64,64,0.6)':v<WARN?'rgba(255,110,26,0.7)':'rgba(0,223,160,0.5)');}
+  CH.vRollMin=new Chart(document.getElementById('cVRollMin'),{type:'bar',data:{labels:rmT,datasets:[{data:rmV,backgroundColor:rmC,borderWidth:0,barPercentage:1.3,categoryPercentage:1.3}]},
+    options:{...MO,plugins:{legend:{display:false}},scales:{x:{...AXNG,ticks:{...TX,maxTicksLimit:8}},y:{...AX,min:Math.max(5,vMin-0.3)}}}});
+
+  // 5s trend
+  CH.vTrend=new Chart(document.getElementById('cVTrend'),{
+    data:{labels:dT,datasets:[{type:'line',data:dVt,borderColor:'#22d3ee',borderWidth:1.5,pointRadius:0,fill:true,backgroundColor:'rgba(34,211,238,0.06)',tension:0.3}]},
+    options:{...MO,plugins:{legend:{display:false}},scales:{x:{...AX,ticks:{...TX,maxTicksLimit:12}},y:{...AX,ticks:{...TX,color:'#22d3ee'},title:{display:true,text:'V',color:'#22d3ee',font:{size:10,family:'IBM Plex Mono'}}}}},
+    plugins:[linePlugin({y:BROW,sc:'y',col:'rgba(255,64,64,0.4)',lbl:'6.3V'},{y:WARN,sc:'y',col:'rgba(255,110,26,0.35)',lbl:'8.5V'})]
+  });
+
+  // Events table
+  const tb=document.getElementById('browoutEvts');
+  if(!browEvts.length){tb.innerHTML='<tr><td colspan="5" style="color:var(--mut)">No voltage events below 7.5V — excellent.</td></tr>';return;}
+  tb.innerHTML=browEvts.slice(0,30).map(e=>{
+    const cls=e.minV<BROW?'tr':e.minV<CRIT?'ty':'tg';
+    const lbl=e.minV<BROW?'Radio trip':e.minV<CRIT?'CAN fault':'Low V';
+    return`<tr><td>${e.t.toFixed(3)}</td><td style="color:${e.minV<BROW?'var(--red)':'var(--ylw)'}">${e.minV.toFixed(4)}</td><td>${e.dur.toFixed(3)}</td><td><span class="tag ${cls}">${lbl}</span></td><td>${e.phase}</td></tr>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+// RENDER CURRENT
+// ═══════════════════════════════════════════════════════
+function renderCurrent({hasCurr,times,currents,cArr,rollCMean01,rollCMean5,rollCMax1,cMax,cMean,cP90,cP99,nOver120,nOver160,peakEvts,volts,dt}){
+  document.getElementById('noCurrentPage').style.display=hasCurr?'none':'block';
+  document.getElementById('currentContent').style.display=hasCurr?'block':'none';
+  if(!hasCurr)return;
+  const n=times.length;
+  document.getElementById('cStatBadge').textContent=`peak ${cMax.toFixed(0)} A`;
+  document.getElementById('cGrid').innerHTML=
+    SC('Peak current',cMax.toFixed(1),'A','Highest single sample',cMax<120?'g':cMax<160?'y':'r')+
+    SC('Mean current',cMean.toFixed(1),'A','Average across match',cMean<60?'g':cMean<90?'y':'r')+
+    SC('P90 current',cP90.toFixed(1),'A','90th percentile demand',cP90<80?'g':cP90<120?'y':'r')+
+    SC('P99 current',cP99.toFixed(1),'A','99th percentile — near-peak',cP99<120?'g':cP99<160?'y':'r')+
+    SC('> 120A time',(nOver120*dt).toFixed(2),'s',`${nOver120} samples above breaker`,nOver120===0?'g':nOver120<20?'y':'r')+
+    SC('> 160A time',(nOver160*dt).toFixed(2),'s',`${nOver160} samples — severe`,nOver160===0?'g':'r')+
+    SC('Peak events',peakEvts.length,'','Local maxima above 80A','b')+
+    SC('1C rating','~18','A','Continuous SLA battery rating','c');
+
+  const step=Math.max(1,Math.floor(n/900));
+  const dT=[],dCr=[],dCm=[],dC5=[],dCMx=[];
+  for(let i=0;i<n;i+=step){
+    dT.push(+times[i].toFixed(2));
+    dCr.push(!isNaN(currents[i])?+Math.max(0,currents[i]).toFixed(2):null);
+    dCm.push(+rollCMean01[i].toFixed(2));
+    dC5.push(+rollCMean5[i].toFixed(2));
+    dCMx.push(+rollCMax1[i].toFixed(2));
+  }
+
+  // Main trace
+  CH.cMain=new Chart(document.getElementById('cCurrMain'),{
+    data:{labels:dT,datasets:[
+      {type:'line',data:dCr,borderColor:'rgba(61,143,255,0.22)',borderWidth:0.8,pointRadius:0,yAxisID:'yC',fill:false,tension:0.05,order:2},
+      {type:'line',data:dCm,borderColor:'#3d8fff',borderWidth:2,pointRadius:0,yAxisID:'yC',fill:false,tension:0.1,order:1},
+    ]},
+    options:{...MO,plugins:{legend:{display:false}},scales:{x:{...AX,ticks:{...TX,maxTicksLimit:12}},yC:{...AX,min:0,ticks:{...TX,color:'#3d8fff'},title:{display:true,text:'A',color:'#3d8fff',font:{size:10,family:'IBM Plex Mono'}}}}},
+    plugins:[linePlugin({y:120,sc:'yC',col:'rgba(255,110,26,0.7)',lbl:'120A breaker'},{y:160,sc:'yC',col:'rgba(255,64,64,0.7)',lbl:'160A critical'})]
+  });
+
+  // Current histogram
+  const validC=currents.filter(c=>!isNaN(c)&&c>=0);
+  const cBins=30,cLo=0,cHi=Math.min(250,cMax*1.05),cSt=(cHi-cLo)/cBins,cCnt=Array(cBins).fill(0),cLbl=[];
+  for(let i=0;i<cBins;i++)cLbl.push((cLo+i*cSt).toFixed(0));
+  validC.forEach(c=>{const b=Math.min(cBins-1,Math.floor((c-cLo)/cSt));if(b>=0)cCnt[b]++;});
+  const cCol=cLbl.map(l=>{const c=parseFloat(l);return c>160?'rgba(255,64,64,0.8)':c>120?'rgba(255,110,26,0.7)':'rgba(61,143,255,0.55)';});
+  CH.cHist=new Chart(document.getElementById('cCHist'),{type:'bar',data:{labels:cLbl,datasets:[{data:cCnt,backgroundColor:cCol,borderWidth:0}]},
+    options:{...MO,plugins:{legend:{display:false}},scales:{x:{...AXNG,ticks:{...TX,maxTicksLimit:8},title:{display:true,text:'A',color:'#47506a',font:{size:10,family:'IBM Plex Mono'}}},y:AX}}});
+
+  // Threshold bars
+  const overCounts=[[80,0],[100,0],[120,0],[160,0]];
+  validC.forEach(c=>overCounts.forEach(pair=>{if(c>pair[0])pair[1]++;}));
+  CH.cThresh=new Chart(document.getElementById('cCThresh'),{type:'bar',
+    data:{labels:overCounts.map(p=>`> ${p[0]}A`),datasets:[{data:overCounts.map(p=>+(p[1]*dt).toFixed(2)),backgroundColor:['rgba(61,143,255,0.5)','rgba(240,180,41,0.65)','rgba(255,110,26,0.7)','rgba(255,64,64,0.85)'],borderWidth:0,borderRadius:3}]},
+    options:{...MO,indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${(+c.raw).toFixed(2)} s`}}},
+      scales:{x:{...AX,title:{display:true,text:'seconds',color:'#47506a',font:{size:10,family:'IBM Plex Mono'}}},y:{ticks:{color:'#6a7490',font:{family:'IBM Plex Mono',size:10}},grid:{display:false}}}}});
+
+  // 1s rolling max
+  const rmStep2=Math.max(1,Math.floor(n/600));
+  const mxT=[],mxV=[],mxC=[];
+  for(let i=0;i<n;i+=rmStep2){mxT.push(+times[i].toFixed(2));const v=+rollCMax1[i].toFixed(1);mxV.push(v);mxC.push(v>160?'rgba(255,64,64,0.85)':v>120?'rgba(255,110,26,0.75)':'rgba(61,143,255,0.5)');}
+  CH.cRollMax=new Chart(document.getElementById('cCRollMax'),{type:'bar',data:{labels:mxT,datasets:[{data:mxV,backgroundColor:mxC,borderWidth:0,barPercentage:1.3,categoryPercentage:1.3}]},
+    options:{...MO,plugins:{legend:{display:false}},scales:{x:{...AXNG,ticks:{...TX,maxTicksLimit:8}},y:{...AX,min:0}}},
+    plugins:[linePlugin({y:120,sc:'y',col:'rgba(255,110,26,0.5)',lbl:'120A'},{y:160,sc:'y',col:'rgba(255,64,64,0.5)',lbl:'160A'})]});
+
+  // V vs I scatter
+  const scStep=Math.max(1,Math.floor(n/500));
+  const viPts=[];
+  for(let i=0;i<n;i+=scStep){if(!isNaN(currents[i])&&currents[i]>5)viPts.push({x:+Math.max(0,currents[i]).toFixed(1),y:+volts[i].toFixed(4)});}
+  CH.viScat=new Chart(document.getElementById('cVIScatter'),{type:'scatter',data:{datasets:[{data:viPts,backgroundColor:'rgba(61,143,255,0.3)',pointRadius:2}]},
+    options:{...MO,plugins:{legend:{display:false}},scales:{x:{...AX,min:0,title:{display:true,text:'Current (A)',color:'#47506a',font:{size:10,family:'IBM Plex Mono'}}},y:{...AX,title:{display:true,text:'Voltage (V)',color:'#47506a',font:{size:10,family:'IBM Plex Mono'}}}}}});
+
+  // 5s trend
+  CH.cTrend=new Chart(document.getElementById('cCTrend'),{
+    data:{labels:dT,datasets:[{type:'line',data:dC5,borderColor:'#22d3ee',borderWidth:1.5,pointRadius:0,fill:true,backgroundColor:'rgba(34,211,238,0.05)',tension:0.3}]},
+    options:{...MO,plugins:{legend:{display:false}},scales:{x:{...AX,ticks:{...TX,maxTicksLimit:12}},y:{...AX,min:0,ticks:{...TX,color:'#22d3ee'},title:{display:true,text:'A',color:'#22d3ee',font:{size:10,family:'IBM Plex Mono'}}}}},
+    plugins:[linePlugin({y:120,sc:'y',col:'rgba(255,110,26,0.4)',lbl:'120A'})]});
+
+  // Peak events table
+  const tb=document.getElementById('peakCurrEvts');
+  if(!peakEvts.length){tb.innerHTML='<tr><td colspan="5" style="color:var(--mut)">No significant current peaks above 80A.</td></tr>';return;}
+  tb.innerHTML=peakEvts.slice(0,60).map(e=>{
+    const cls=e.c>160?'tr':e.c>120?'ty':'tb';const lbl=e.c>160?'Critical':e.c>120?'High':'Notable';
+    return`<tr><td>${e.t.toFixed(3)}</td><td style="color:${e.c>160?'var(--red)':e.c>120?'var(--ylw)':'var(--blu)'}">${e.c.toFixed(1)}</td><td>${e.v.toFixed(3)}</td><td>${e.sag.toFixed(4)}</td><td><span class="tag ${cls}">${lbl}</span></td></tr>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+// RENDER POWER
+// ═══════════════════════════════════════════════════════
+function renderPower({hasCurr,times,powArr,rollPMean1,rollPMean5,cumEn,pMax,pMean,totalWh,socE,socS,volts,dt,n,ocv}){
+  document.getElementById('noPowerPage').style.display=hasCurr?'none':'block';
+  document.getElementById('powerContent').style.display=hasCurr?'block':'none';
+  if(!hasCurr)return;
+  const BATT_WH=216;
+  const pctUsed=totalWh/BATT_WH*100;
+  document.getElementById('pStatBadge').textContent=`${totalWh.toFixed(1)} Wh`;
+  document.getElementById('pGrid').innerHTML=
+    SC('Peak power',pMax.toFixed(0),'W','Highest instantaneous power',pMax<2000?'g':pMax<3000?'y':'r')+
+    SC('Mean power',pMean.toFixed(0),'W','Average demand',pMean<800?'g':pMean<1200?'y':'r')+
+    SC('Total energy',totalWh.toFixed(2),'Wh','Energy used this match',pctUsed<50?'g':pctUsed<70?'y':'r')+
+    SC('% capacity used',pctUsed.toFixed(1),'%','of ~216 Wh (18Ah×12V)',pctUsed<50?'g':pctUsed<70?'y':'r')+
+    SC('Remaining',Math.max(0,BATT_WH-totalWh).toFixed(1),'Wh','Estimated remaining','b')+
+    SC('Matches left',Math.max(0,(BATT_WH-totalWh)/Math.max(1,totalWh)).toFixed(1),'×','Est. additional matches','b')+
+    SC('SOC end',socE.toFixed(0),'%','Estimated end charge',socE>=50?'g':socE>=30?'y':'r');
+
+  const step=Math.max(1,Math.floor(n/900));
+  const dT=[],dPr=[],dPm=[],dP5=[],dEn=[],dSOC=[];
+  const socFn=v=>Math.min(100,Math.max(0,(v-10.5)/(12.8-10.5)*100));
+  for(let i=0;i<n;i+=step){
+    dT.push(+times[i].toFixed(2));dPr.push(+powArr[i].toFixed(0));dPm.push(+rollPMean1[i].toFixed(0));dP5.push(+rollPMean5[i].toFixed(0));dEn.push(+cumEn[i].toFixed(3));dSOC.push(+socFn(volts[i]).toFixed(1));
+  }
+  const cap70=dT.map(()=>+(BATT_WH*0.7).toFixed(1));
+  const cap100=dT.map(()=>BATT_WH);
+
+  // Main trace
+  CH.pMain=new Chart(document.getElementById('cPowMain'),{
+    data:{labels:dT,datasets:[
+      {type:'line',data:dPr,borderColor:'rgba(167,139,250,0.2)',borderWidth:0.8,pointRadius:0,yAxisID:'yP',fill:false,tension:0.05,order:2},
+      {type:'line',data:dPm,borderColor:'#a78bfa',borderWidth:2,pointRadius:0,yAxisID:'yP',fill:false,tension:0.2,order:1},
+    ]},
+    options:{...MO,plugins:{legend:{display:false}},scales:{x:{...AX,ticks:{...TX,maxTicksLimit:12}},yP:{...AX,min:0,ticks:{...TX,color:'#a78bfa'},title:{display:true,text:'W',color:'#a78bfa',font:{size:10,family:'IBM Plex Mono'}}}}},
+    plugins:[linePlugin({y:1500,sc:'yP',col:'rgba(255,110,26,0.55)',lbl:'1500W'})]});
+
+  // Energy
+  CH.energy=new Chart(document.getElementById('cEnergy'),{
+    data:{labels:dT,datasets:[
+      {type:'line',data:dEn,borderColor:'#f0b429',borderWidth:2,fill:true,backgroundColor:'rgba(240,180,41,0.07)',pointRadius:0,tension:0.2,order:1},
+      {type:'line',data:cap70,borderColor:'rgba(255,64,64,0.45)',borderWidth:1,pointRadius:0,fill:false,borderDash:[4,4],order:2},
+      {type:'line',data:cap100,borderColor:'rgba(255,64,64,0.2)',borderWidth:1,pointRadius:0,fill:false,borderDash:[2,4],order:3},
+    ]},
+    options:{...MO,plugins:{legend:{display:false}},scales:{x:{...AX,ticks:{...TX,maxTicksLimit:10}},y:{...AX,ticks:{...TX,color:'#f0b429'},title:{display:true,text:'Wh',color:'#f0b429',font:{size:10,family:'IBM Plex Mono'}}}}},
+    plugins:[{afterDraw(c){
+      const sc=c.scales['y'],ca=c.chartArea,ctx=c.ctx;
+      const y70=sc.getPixelForValue(BATT_WH*0.7);ctx.save();ctx.font='9px IBM Plex Mono';ctx.fillStyle='rgba(255,64,64,0.6)';ctx.textAlign='left';ctx.fillText('70% cap',ca.left+4,y70-3);ctx.restore();
+    }}]
+  });
+
+  // Power histogram
+  const pa=[...powArr];
+  const pBins=30,pLo=0,pHi=Math.min(4000,pMax*1.05),pSt=(pHi-pLo)/pBins,pCnt=Array(pBins).fill(0),pLbl=[];
+  for(let i=0;i<pBins;i++)pLbl.push((pLo+i*pSt).toFixed(0));
+  pa.forEach(p=>{const b=Math.min(pBins-1,Math.floor((p-pLo)/pSt));if(b>=0)pCnt[b]++;});
+  const pCol=pLbl.map(l=>{const p=parseFloat(l);return p>2500?'rgba(255,64,64,0.8)':p>1500?'rgba(255,110,26,0.7)':'rgba(167,139,250,0.55)';});
+  CH.pHist=new Chart(document.getElementById('cPHist'),{type:'bar',data:{labels:pLbl,datasets:[{data:pCnt,backgroundColor:pCol,borderWidth:0}]},
+    options:{...MO,plugins:{legend:{display:false}},scales:{x:{...AXNG,ticks:{...TX,maxTicksLimit:8},title:{display:true,text:'W',color:'#47506a',font:{size:10,family:'IBM Plex Mono'}}},y:AX}}});
+
+  // 5s power trend
+  CH.pTrend=new Chart(document.getElementById('cPTrend'),{
+    data:{labels:dT,datasets:[{type:'line',data:dP5,borderColor:'#22d3ee',borderWidth:1.5,fill:true,backgroundColor:'rgba(34,211,238,0.05)',pointRadius:0,tension:0.3}]},
+    options:{...MO,plugins:{legend:{display:false}},scales:{x:{...AX,ticks:{...TX,maxTicksLimit:10}},y:{...AX,min:0,ticks:{...TX,color:'#22d3ee'},title:{display:true,text:'W',color:'#22d3ee',font:{size:10,family:'IBM Plex Mono'}}}}},
+    plugins:[linePlugin({y:1500,sc:'y',col:'rgba(255,110,26,0.4)',lbl:'1500W'})]});
+
+  // P vs V scatter
+  const pvStep=Math.max(1,Math.floor(n/500));
+  const pvPts=[];
+  for(let i=0;i<n;i+=pvStep)pvPts.push({x:+volts[i].toFixed(3),y:+powArr[i].toFixed(0)});
+  CH.pvScat=new Chart(document.getElementById('cPVScatter'),{type:'scatter',data:{datasets:[{data:pvPts,backgroundColor:'rgba(167,139,250,0.3)',pointRadius:2}]},
+    options:{...MO,plugins:{legend:{display:false}},scales:{x:{...AX,title:{display:true,text:'Voltage (V)',color:'#47506a',font:{size:10,family:'IBM Plex Mono'}}},y:{...AX,min:0,title:{display:true,text:'Power (W)',color:'#47506a',font:{size:10,family:'IBM Plex Mono'}}}}}});
+
+  // SOC estimate over time
+  CH.soc=new Chart(document.getElementById('cSOC'),{
+    data:{labels:dT,datasets:[{type:'line',data:dSOC,borderColor:'#f0b429',borderWidth:1.5,fill:true,backgroundColor:'rgba(240,180,41,0.07)',pointRadius:0,tension:0.2}]},
+    options:{...MO,plugins:{legend:{display:false}},scales:{x:{...AX,ticks:{...TX,maxTicksLimit:10}},y:{...AX,min:0,max:105,ticks:{...TX,color:'#f0b429'},title:{display:true,text:'SOC %',color:'#f0b429',font:{size:10,family:'IBM Plex Mono'}}}}},
+    plugins:[linePlugin({y:20,sc:'y',col:'rgba(255,64,64,0.4)',lbl:'20%'})]});
+}
+
+// ═══════════════════════════════════════════════════════
+// RENDER IMPEDANCE
+// ═══════════════════════════════════════════════════════
+function renderImpedance({hasCurr,impArr,sortR,scPts,slope,medR,p10,p90,p97,rollImpMed05,rollImpMed2,spikeArr,iBuckets,ocv}){
+  document.getElementById('noImpPage').style.display=hasCurr?'none':'block';
+  document.getElementById('impContent').style.display=hasCurr?'block':'none';
+  if(!hasCurr)return;
+
+  document.getElementById('iStatBadge').textContent=`median ${(medR*1000).toFixed(1)} mΩ`;
+  const bands=[{l:'<10mΩ New',c:'#00dfa0'},{l:'10–18 Good',c:'#7eefc6'},{l:'18–28 Wear',c:'#f0b429'},{l:'28–40 Replace',c:'#ff6e1a'},{l:'>40 Critical',c:'#ff4040'}];
+  document.getElementById('impBands').innerHTML=bands.map(b=>`<span class="bd" style="color:${b.c};border-color:${b.c}44;background:${b.c}11">${b.l}</span>`).join('');
+  const spkFac=(!isNaN(p90)&&!isNaN(medR)&&medR>0)?p90/medR:NaN;
+  const ccaMed=isNaN(medR)?NaN:Math.round(7.2/medR);
+  document.getElementById('iGrid').innerHTML=
+    SC('P10 (light load)',(p10*1000).toFixed(1),'mΩ','Best-case resistance','g')+
+    SC('Median R',(medR*1000).toFixed(1),'mΩ','Representative impedance',medR<=0.018?'g':medR<=0.028?'y':'r')+
+    SC('P90 (heavy load)',(p90*1000).toFixed(1),'mΩ','Under significant current',p90<=0.025?'g':p90<=0.040?'y':'r')+
+    SC('P97 spike',(p97*1000).toFixed(1),'mΩ','Worst transient',p97<=0.04?'g':p97<=0.06?'y':'r')+
+    SC('Spike factor',isNaN(spkFac)?'—':spkFac.toFixed(1),'×','P90/Median',isNaN(spkFac)?'':spkFac<=2?'g':spkFac<=3.5?'y':'r')+
+    SC('Regression R',isNaN(slope)?'—':(slope*1000).toFixed(1),'mΩ','ΔV/ΔI linear fit','b')+
+    SC('Est. CCA',isNaN(ccaMed)?'—':ccaMed,'A','7.2/R_med empirical',isNaN(ccaMed)?'':ccaMed>=400?'g':ccaMed>=260?'y':'r')+
+    SC('Samples',impArr.length,'','I>15A samples used','b');
+
+  const istep=Math.max(1,Math.floor(impArr.length/700));
+  const iT=[],iR=[],iRm=[],iRcol=[];
+  for(let i=0;i<impArr.length;i+=istep){
+    const r=impArr[i].R*1000;iT.push(+impArr[i].t.toFixed(2));iR.push(+r.toFixed(2));iRm.push(+rollImpMed05[i].toFixed(2));
+    iRcol.push(r<18?'rgba(0,223,160,0.45)':r<28?'rgba(240,180,41,0.55)':'rgba(255,64,64,0.65)');
+  }
+  const maxY=Math.min(100,(p97||0.06)*1000*1.15);
+
+  // Main impedance chart
+  CH.iMain=new Chart(document.getElementById('cImpMain'),{
+    data:{labels:iT,datasets:[
+      {type:'bar',data:iR,backgroundColor:iRcol,borderWidth:0,barPercentage:1.4,categoryPercentage:1.4,yAxisID:'yR',order:2},
+      {type:'line',data:iRm,borderColor:'#f0b429',borderWidth:2,pointRadius:0,yAxisID:'yR',fill:false,tension:0.3,order:1},
+    ]},
+    options:{...MO,plugins:{legend:{display:false}},scales:{x:{...AX,ticks:{...TX,maxTicksLimit:12}},yR:{...AX,min:0,max:maxY,ticks:{...TX,color:'#f0b429'},title:{display:true,text:'mΩ',color:'#f0b429',font:{size:10,family:'IBM Plex Mono'}}}}},
+    plugins:[linePlugin({y:28,sc:'yR',col:'rgba(255,110,26,0.55)',lbl:'28mΩ replace'})]});
+
+  // Histogram
+  const hB=30,hLo=0,hHi=Math.min(90,(p97||0.06)*1000*1.1),hSt=(hHi-hLo)/hB,hC=Array(hB).fill(0),hL=[];
+  for(let i=0;i<hB;i++)hL.push((hLo+i*hSt).toFixed(0));
+  sortR.forEach(r=>{const b=Math.min(hB-1,Math.floor((r*1000-hLo)/hSt));if(b>=0)hC[b]++;});
+  const hCol=hL.map(l=>{const v=parseFloat(l);return v<18?'rgba(0,223,160,0.65)':v<28?'rgba(240,180,41,0.65)':'rgba(255,64,64,0.65)';});
+  const medBin=sortR.length?(medR*1000-hLo)/hSt:0;
+  CH.iHist=new Chart(document.getElementById('cIHist'),{type:'bar',data:{labels:hL,datasets:[{data:hC,backgroundColor:hCol,borderWidth:0}]},
+    options:{...MO,plugins:{legend:{display:false}},scales:{x:{...AXNG,ticks:{...TX,maxTicksLimit:8},title:{display:true,text:'mΩ',color:'#47506a',font:{size:10,family:'IBM Plex Mono'}}},y:AX}},
+    plugins:[{afterDraw(c){const sc=c.scales['x'],ca=c.chartArea,ctx=c.ctx,px=sc.getPixelForValue(medBin);ctx.save();ctx.strokeStyle='#00dfa0';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(px,ca.top);ctx.lineTo(px,ca.bottom);ctx.stroke();ctx.font='9px IBM Plex Mono';ctx.fillStyle='#00dfa0';ctx.textAlign='left';ctx.fillText(`med ${(medR*1000).toFixed(1)}mΩ`,px+3,ca.top+12);ctx.restore();}}]});
+
+  // Scatter sag vs I
+  const xMx=Math.min(230,scPts.length?Math.max(...scPts.map(p=>p.x))*1.08:200);
+  const regL=isNaN(slope)?[]:[{x:0,y:0},{x:xMx,y:+(slope*xMx).toFixed(4)}];
+  CH.iScat=new Chart(document.getElementById('cIScat'),{type:'scatter',
+    data:{datasets:[{label:'Sag samples',data:scPts,backgroundColor:'rgba(0,223,160,0.3)',pointRadius:2},...(regL.length?[{label:`R=${(slope*1000).toFixed(1)}mΩ`,data:regL,type:'line',borderColor:'rgba(240,180,41,0.85)',borderWidth:1.5,pointRadius:0,fill:false}]:[]) ]},
+    options:{...MO,plugins:{legend:{display:regL.length>0,labels:{color:'#6a7490',font:{size:10,family:'IBM Plex Mono'},boxWidth:10}}},
+      scales:{x:{...AX,min:0,max:xMx,title:{display:true,text:'Current (A)',color:'#47506a',font:{size:10,family:'IBM Plex Mono'}}},y:{...AX,min:0,title:{display:true,text:'Sag (V)',color:'#47506a',font:{size:10,family:'IBM Plex Mono'}}}}}});
+
+  // Spike factor over time
+  const spkStep=Math.max(1,Math.floor(spikeArr.length/600));
+  const spkT=[],spkV=[],spkC=[];
+  for(let i=0;i<spikeArr.length;i+=spkStep){spkT.push(+spikeArr[i].t.toFixed(2));const s=+Math.min(10,spikeArr[i].spk).toFixed(2);spkV.push(s);spkC.push(s>4?'rgba(255,64,64,0.7)':s>3?'rgba(255,110,26,0.65)':'rgba(0,223,160,0.45)');}
+  CH.iSpike=new Chart(document.getElementById('cISpike'),{type:'bar',data:{labels:spkT,datasets:[{data:spkV,backgroundColor:spkC,borderWidth:0,barPercentage:1.4,categoryPercentage:1.4}]},
+    options:{...MO,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${(+c.raw).toFixed(2)}× median`}}},scales:{x:{...AXNG,ticks:{...TX,maxTicksLimit:8}},y:{...AX,min:0,title:{display:true,text:'× median',color:'#47506a',font:{size:10,family:'IBM Plex Mono'}}}}},
+    plugins:[linePlugin({y:3,sc:'y',col:'rgba(255,110,26,0.5)',lbl:'3× warn'},{y:4,sc:'y',col:'rgba(255,64,64,0.5)',lbl:'4× critical'})]});
+
+  // 2s rolling median trend
+  const itr2step=Math.max(1,Math.floor(impArr.length/600));
+  const itrT=[],itrV=[];
+  for(let i=0;i<impArr.length;i+=itr2step){itrT.push(+impArr[i].t.toFixed(2));itrV.push(+rollImpMed2[i].toFixed(2));}
+  CH.iTrend=new Chart(document.getElementById('cITrend'),{
+    data:{labels:itrT,datasets:[{type:'line',data:itrV,borderColor:'#22d3ee',borderWidth:1.5,pointRadius:0,fill:true,backgroundColor:'rgba(34,211,238,0.05)',tension:0.4}]},
+    options:{...MO,plugins:{legend:{display:false}},scales:{x:{...AX,ticks:{...TX,maxTicksLimit:10}},y:{...AX,min:0,ticks:{...TX,color:'#22d3ee'},title:{display:true,text:'mΩ',color:'#22d3ee',font:{size:10,family:'IBM Plex Mono'}}}}},
+    plugins:[linePlugin({y:28,sc:'y',col:'rgba(255,110,26,0.4)',lbl:'28mΩ'})]});
+
+  // Percentile bands
+  if(iBuckets.length>2){
+    const bkT=iBuckets.map(b=>+b.t.toFixed(0)),bkP10=iBuckets.map(b=>+b.p10.toFixed(2)),bkP50=iBuckets.map(b=>+b.p50.toFixed(2)),bkP90=iBuckets.map(b=>+b.p90.toFixed(2));
+    CH.iBands=new Chart(document.getElementById('cIBands'),{
+      data:{labels:bkT,datasets:[
+        {type:'line',label:'P90',data:bkP90,borderColor:'rgba(255,64,64,0.7)',borderWidth:1.5,pointRadius:3,fill:false,tension:0.3},
+        {type:'line',label:'P50',data:bkP50,borderColor:'rgba(240,180,41,0.8)',borderWidth:2,pointRadius:3,fill:false,tension:0.3},
+        {type:'line',label:'P10',data:bkP10,borderColor:'rgba(0,223,160,0.7)',borderWidth:1.5,pointRadius:3,fill:false,tension:0.3},
+      ]},
+      options:{...MO,plugins:{legend:{display:true,labels:{color:'#6a7490',font:{size:10,family:'IBM Plex Mono'},boxWidth:10}}},
+        scales:{x:{...AX,ticks:{...TX,maxTicksLimit:10},title:{display:true,text:'Time (s)',color:'#47506a',font:{size:10,family:'IBM Plex Mono'}}},y:{...AX,min:0,title:{display:true,text:'mΩ',color:'#47506a',font:{size:10,family:'IBM Plex Mono'}}}}}});
+  } else {
+    document.getElementById('cIBands').parentElement.innerHTML='<div class="nodata" style="padding:20px"><span style="font-size:20px">〰</span>Not enough data for bucket analysis.</div>';
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// RENDER BFG PAGE
+// ═══════════════════════════════════════════════════════
+function renderBfg(bfg, impArr, dsTimes){
+  const hasBfg=bfg&&bfg.length>3;
+  document.getElementById('noBfgMsg').style.display=hasBfg?'none':'block';
+  document.getElementById('bfgContent').style.display=hasBfg?'block':'none';
+  if(!hasBfg)return;
+
+  const fv=v=>isNaN(v)||v==null?null:+v;
+  const BT=bfg.map(r=>+r.t.toFixed(2));
+  const BV=bfg.map(r=>fv(r.v)), BC=bfg.map(r=>fv(r.c));
+  const BTemp=bfg.map(r=>fv(r.temp)), BSOC=bfg.map(r=>fv(r.soc));
+  const BR=bfg.map(r=>fv(r.r)), BFC=bfg.map(r=>fv(r.fullCap)), BRC=bfg.map(r=>fv(r.remCap));
+
+  const validV=BV.filter(Boolean), validC=BC.filter(v=>v!=null&&v>0);
+  const validT=BTemp.filter(Boolean), validSOC=BSOC.filter(Boolean), validR=BR.filter(Boolean);
+  const validFC=BFC.filter(Boolean), validRC=BRC.filter(Boolean);
+
+  const fmtOr=(arr,fmt,fallback='—')=>arr.length?fmt(arr):fallback;
+  const mn=a=>a.reduce((x,y)=>Math.min(x,y),Infinity);
+  const mx=a=>a.reduce((x,y)=>Math.max(x,y),-Infinity);
+  const avg=a=>a.reduce((x,y)=>x+y,0)/a.length;
+
+  document.getElementById('bfgStatBadge').textContent=`${bfg.length} samples`;
+  document.getElementById('bfgGrid').innerHTML=
+    SC('BFG min V',validV.length?mn(validV).toFixed(3):'—','V','Lowest BFG voltage reading',validV.length&&mn(validV)>=8.5?'g':validV.length&&mn(validV)>=7.5?'y':'r')+
+    SC('BFG mean V',validV.length?avg(validV).toFixed(3):'—','V','Mean BFG voltage','b')+
+    SC('Peak current',validC.length?mx(validC).toFixed(1):'—','A','Highest BFG current',validC.length&&mx(validC)<120?'g':validC.length&&mx(validC)<160?'y':'r')+
+    SC('Max temp',validT.length?mx(validT).toFixed(1):'—','°C','Highest battery temp',validT.length&&mx(validT)<40?'g':validT.length&&mx(validT)<45?'y':'r')+
+    SC('SOC start→end',validSOC.length?`${validSOC[0].toFixed(0)}→${validSOC[validSOC.length-1].toFixed(0)}`:'—','%','Hardware-measured SOC change',validSOC.length&&validSOC[validSOC.length-1]>=50?'g':validSOC.length&&validSOC[validSOC.length-1]>=30?'y':'r')+
+    SC('BFG median R',validR.length?avg([...validR].sort((a,b)=>a-b).slice(Math.floor(validR.length*0.4),Math.floor(validR.length*0.6))).toFixed(1):'—','mΩ','Hardware-measured resistance',validR.length&&avg(validR)<18?'g':validR.length&&avg(validR)<28?'y':'r')+
+    SC('Full capacity',validFC.length?validFC[0].toFixed(2):'—','Ah','Rated capacity from BFG','b')+
+    SC('Remaining cap',validRC.length?validRC[validRC.length-1].toFixed(2):'—','Ah','End-of-match remaining','b')+
+    SC('Cycle count',bfg.find(r=>!isNaN(r.cycles)&&r.cycles>0)?bfg.find(r=>!isNaN(r.cycles)).cycles:'—','','Number of charge cycles',bfg.find(r=>!isNaN(r.cycles)&&r.cycles<200)?'g':bfg.find(r=>!isNaN(r.cycles)&&r.cycles<400)?'y':'r');
+
+  // V+I trace
+  CH.bfgVI=new Chart(document.getElementById('cBfgVI'),{
+    data:{labels:BT,datasets:[
+      {type:'line',data:BV,borderColor:'#00dfa0',borderWidth:1.5,pointRadius:0,yAxisID:'yV',fill:false,tension:0.05,order:1},
+      ...(validC.length?[{type:'line',data:BC,borderColor:'rgba(61,143,255,0.7)',borderWidth:1,pointRadius:0,yAxisID:'yC',fill:false,tension:0.05,borderDash:[3,3],order:2}]:[]),
+    ]},
+    options:{...MO,plugins:{legend:{display:false}},scales:{
+      x:{...AX,ticks:{...TX,maxTicksLimit:12}},
+      yV:{position:'left',...AX,ticks:{...TX,color:'#00dfa0'},title:{display:true,text:'V',color:'#00dfa0',font:{size:10,family:'IBM Plex Mono'}}},
+      ...(validC.length?{yC:{position:'right',ticks:{...TX,color:'#3d8fff'},grid:{display:false},title:{display:true,text:'A',color:'#3d8fff',font:{size:10,family:'IBM Plex Mono'}}}}:{})
+    }},
+    plugins:[linePlugin({y:6.3,sc:'yV',col:'rgba(255,64,64,0.5)',lbl:'6.3V'},{y:8.5,sc:'yV',col:'rgba(255,110,26,0.4)',lbl:'8.5V'})]
+  });
+
+  // SOC
+  CH.bfgSOC=new Chart(document.getElementById('cBfgSOC'),{
+    data:{labels:BT,datasets:[{type:'line',data:BSOC,borderColor:'#f0b429',borderWidth:2,pointRadius:0,fill:true,backgroundColor:'rgba(240,180,41,0.07)',tension:0.2}]},
+    options:{...MO,plugins:{legend:{display:false}},scales:{x:{...AX,ticks:{...TX,maxTicksLimit:10}},y:{...AX,min:0,max:105,ticks:{...TX,color:'#f0b429'},title:{display:true,text:'SOC %',color:'#f0b429',font:{size:10,family:'IBM Plex Mono'}}}}},
+    plugins:[linePlugin({y:20,sc:'y',col:'rgba(255,64,64,0.4)',lbl:'20%'})]
+  });
+
+  // Capacity
+  if(validRC.length||validFC.length){
+    const cap100=BT.map(()=>validFC.length?validFC[0]:18);
+    CH.bfgCap=new Chart(document.getElementById('cBfgCap'),{
+      data:{labels:BT,datasets:[
+        {type:'line',data:BRC,borderColor:'#3d8fff',borderWidth:2,pointRadius:0,fill:true,backgroundColor:'rgba(61,143,255,0.07)',tension:0.2,label:'Remaining'},
+        {type:'line',data:cap100,borderColor:'rgba(255,64,64,0.35)',borderWidth:1,pointRadius:0,fill:false,borderDash:[4,4],label:'Full cap'},
+      ]},
+      options:{...MO,plugins:{legend:{display:true,labels:{color:'#6a7490',font:{size:10,family:'IBM Plex Mono'},boxWidth:10}}},
+        scales:{x:{...AX,ticks:{...TX,maxTicksLimit:10}},y:{...AX,min:0,ticks:{...TX,color:'#3d8fff'},title:{display:true,text:'Ah',color:'#3d8fff',font:{size:10,family:'IBM Plex Mono'}}}}}
+    });
+  }
+
+  // Temperature
+  if(validT.length){
+    const tColors=BTemp.map(v=>v===null?'transparent':v>45?'rgba(255,64,64,0.7)':v<15?'rgba(61,143,255,0.6)':'rgba(240,180,41,0.65)');
+    CH.bfgTemp=new Chart(document.getElementById('cBfgTemp'),{
+      data:{labels:BT,datasets:[{type:'line',data:BTemp,borderColor:'#f0b429',borderWidth:1.5,pointRadius:0,fill:true,backgroundColor:'rgba(240,180,41,0.05)',tension:0.3}]},
+      options:{...MO,plugins:{legend:{display:false}},scales:{x:{...AX,ticks:{...TX,maxTicksLimit:10}},y:{...AX,ticks:{...TX,color:'#f0b429'},title:{display:true,text:'°C',color:'#f0b429',font:{size:10,family:'IBM Plex Mono'}}}}},
+      plugins:[linePlugin({y:45,sc:'y',col:'rgba(255,64,64,0.55)',lbl:'45°C danger'},{y:15,sc:'y',col:'rgba(61,143,255,0.5)',lbl:'15°C cold'})]
+    });
+  }
+
+  // BFG resistance
+  if(validR.length){
+    const rColors=BR.map(v=>v===null?'transparent':v>28?'rgba(255,64,64,0.7)':v>18?'rgba(240,180,41,0.65)':'rgba(167,139,250,0.6)');
+    CH.bfgR=new Chart(document.getElementById('cBfgR'),{
+      data:{labels:BT,datasets:[
+        {type:'bar',data:BR,backgroundColor:rColors,borderWidth:0,barPercentage:1.3,categoryPercentage:1.3,yAxisID:'yR',order:2},
+        {type:'line',data:rMean(new Float32Array(BR.map(v=>v??0)),Math.max(1,Math.round(bfg.length/20))),borderColor:'#a78bfa',borderWidth:1.5,pointRadius:0,yAxisID:'yR',fill:false,tension:0.3,order:1},
+      ]},
+      options:{...MO,plugins:{legend:{display:false}},scales:{x:{...AX,ticks:{...TX,maxTicksLimit:10}},yR:{...AX,min:0,ticks:{...TX,color:'#a78bfa'},title:{display:true,text:'mΩ',color:'#a78bfa',font:{size:10,family:'IBM Plex Mono'}}}}},
+      plugins:[linePlugin({y:28,sc:'yR',col:'rgba(255,110,26,0.55)',lbl:'28mΩ replace'})]
+    });
+  }
+
+  // R vs Temp scatter
+  if(validR.length&&validT.length){
+    const rtPts=bfg.filter(r=>!isNaN(r.r)&&r.r>0&&!isNaN(r.temp)).map(r=>({x:+r.temp.toFixed(1),y:+r.r.toFixed(2)}));
+    CH.bfgRTScat=new Chart(document.getElementById('cBfgRTScat'),{type:'scatter',
+      data:{datasets:[{data:rtPts,backgroundColor:'rgba(167,139,250,0.4)',pointRadius:2.5}]},
+      options:{...MO,plugins:{legend:{display:false}},
+        scales:{x:{...AX,title:{display:true,text:'Temperature (°C)',color:'#47506a',font:{size:10,family:'IBM Plex Mono'}}},
+          y:{...AX,min:0,title:{display:true,text:'Resistance (mΩ)',color:'#47506a',font:{size:10,family:'IBM Plex Mono'}}}}}});
+  }
+
+  // BFG R vs V/I estimated R comparison
+  if(validR.length&&impArr.length){
+    const bfgRStep=Math.max(1,Math.floor(bfg.length/300));
+    const bfgRds=bfg.filter((_,i)=>i%bfgRStep===0).map(r=>({x:+r.t.toFixed(2),y:r.r!=null?+r.r.toFixed(2):null})).filter(p=>p.y!=null);
+    const impStep=Math.max(1,Math.floor(impArr.length/300));
+    const impRds=impArr.filter((_,i)=>i%impStep===0).map(s=>({x:+s.t.toFixed(2),y:+(s.R*1000).toFixed(2)}));
+    CH.bfgRComp=new Chart(document.getElementById('cBfgRComp'),{type:'scatter',
+      data:{datasets:[
+        {label:'BFG (hardware)',data:bfgRds,backgroundColor:'rgba(167,139,250,0.5)',pointRadius:2.5,type:'scatter'},
+        {label:'V/I estimate',data:impRds,backgroundColor:'rgba(0,223,160,0.35)',pointRadius:2,type:'scatter'},
+      ]},
+      options:{...MO,plugins:{legend:{display:true,labels:{color:'#6a7490',font:{size:10,family:'IBM Plex Mono'},boxWidth:10}}},
+        scales:{x:{...AX,title:{display:true,text:'Time (s)',color:'#47506a',font:{size:10,family:'IBM Plex Mono'}}},
+          y:{...AX,min:0,title:{display:true,text:'Resistance (mΩ)',color:'#47506a',font:{size:10,family:'IBM Plex Mono'}}}}}});
+  }
+
+  // Table
+  const tbody=document.getElementById('bfgTable');
+  const fmtVal=(v,dp=3)=>isNaN(v)||v==null?'—':v.toFixed(dp);
+  tbody.innerHTML=bfg.slice(0,200).map(r=>`<tr>
+    <td>${r.t.toFixed(3)}</td>
+    <td>${fmtVal(r.v)}</td><td>${fmtVal(r.c,1)}</td><td>${fmtVal(r.soc,1)}</td>
+    <td>${fmtVal(r.temp,1)}</td><td>${fmtVal(r.r,2)}</td>
+    <td>${fmtVal(r.remCap,3)}</td><td>${fmtVal(r.fullCap,3)}</td>
+  </tr>`).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+// LOADING STATE
+// ═══════════════════════════════════════════════════════
+function setLoad(msg){
+  document.getElementById('loadBar').style.display=msg?'block':'none';
+  document.getElementById('loadMsg').textContent=msg;
+}
+</script>
+</body>
+</html>
