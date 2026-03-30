@@ -1,0 +1,1453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>FRC Battery Analyzer</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+/* ── TOKENS ── */
+:root{
+  --bg:#07090e; --bg2:#0c0f18; --bg3:#11151f; --card:#0d1019;
+  --bord:rgba(255,255,255,0.06); --bord2:rgba(255,255,255,0.12);
+  --txt:#cdd3e8; --mut:#47506a; --mut2:#6a7490;
+  --grn:#00dfa0; --grn2:rgba(0,223,160,0.09);
+  --ylw:#f0b429; --red:#ff4040; --blu:#3d8fff;
+  --ora:#ff6e1a; --pur:#a78bfa; --cya:#22d3ee;
+  --mono:'IBM Plex Mono',monospace;
+  --sans:'IBM Plex Sans',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--txt);font-family:var(--sans);font-weight:300;min-height:100vh}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,223,160,0.006) 3px,rgba(0,223,160,0.006) 4px)}
+
+/* ── PAGES ── */
+.page{display:none;position:relative;z-index:1;min-height:100vh}
+.page.active{display:block}
+
+/* ════════════════════════════════════════
+   LANDING PAGE
+════════════════════════════════════════ */
+#landing{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  min-height:100vh;padding:48px 24px;
+}
+.land-logo{
+  font-family:var(--mono);font-size:11px;letter-spacing:0.2em;color:var(--grn);
+  text-transform:uppercase;margin-bottom:32px;
+}
+.land-logo span{color:var(--mut2)}
+.land-title{font-size:36px;font-weight:500;letter-spacing:-0.5px;margin-bottom:12px;text-align:center}
+.land-sub{font-size:14px;color:var(--mut2);line-height:1.8;text-align:center;max-width:540px;margin-bottom:48px}
+.land-sub strong{color:var(--txt);font-weight:500}
+
+/* Upload cards */
+.upload-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;width:100%;max-width:700px;margin-bottom:28px}
+@media(max-width:580px){.upload-grid{grid-template-columns:1fr}}
+.upload-card{
+  background:var(--bg2);border:1px solid var(--bord2);border-radius:10px;
+  padding:24px;cursor:pointer;transition:border-color .2s,background .2s;
+  display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;
+}
+.upload-card:hover{border-color:var(--grn);background:var(--bg3)}
+.upload-card.has-file{border-color:var(--grn);background:rgba(0,223,160,0.05)}
+.upload-card.optional:hover{border-color:var(--ylw)}
+.upload-card.optional.has-file{border-color:var(--ylw)}
+.uc-icon{font-size:32px}
+.uc-label{font-family:var(--mono);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;
+  color:var(--grn);margin-bottom:2px}
+.upload-card.optional .uc-label{color:var(--ylw)}
+.uc-title{font-size:15px;font-weight:500}
+.uc-sub{font-size:12px;color:var(--mut2);line-height:1.6}
+.uc-sub code{font-family:var(--mono);font-size:11px;color:var(--grn);background:var(--grn2);padding:1px 5px;border-radius:3px}
+.upload-card.optional .uc-sub code{color:var(--ylw);background:rgba(240,180,41,0.09)}
+.uc-filename{font-family:var(--mono);font-size:11px;color:var(--grn);margin-top:4px;word-break:break-all}
+.upload-card.optional .uc-filename{color:var(--ylw)}
+input[type=file]{display:none}
+
+.land-analyze{
+  padding:13px 44px;background:var(--grn2);border:1px solid rgba(0,223,160,0.4);
+  border-radius:6px;color:var(--grn);font-family:var(--sans);font-size:15px;font-weight:500;
+  cursor:pointer;transition:all .15s;letter-spacing:0.02em;
+}
+.land-analyze:hover:not(:disabled){background:rgba(0,223,160,0.18)}
+.land-analyze:disabled{opacity:0.35;cursor:not-allowed}
+.land-demo{
+  margin-top:14px;background:none;border:1px solid var(--bord2);
+  border-radius:6px;color:var(--mut2);font-family:var(--sans);font-size:13px;
+  padding:8px 24px;cursor:pointer;transition:all .15s;
+}
+.land-demo:hover{border-color:var(--bord2);color:var(--txt)}
+
+.land-hints{margin-top:36px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;max-width:700px;width:100%}
+@media(max-width:580px){.land-hints{grid-template-columns:1fr}}
+.hint-card{background:var(--bg2);border:1px solid var(--bord);border-radius:6px;padding:14px 16px}
+.hint-card h4{font-family:var(--mono);font-size:9px;letter-spacing:0.12em;color:var(--grn);text-transform:uppercase;margin-bottom:7px}
+.hint-card p{font-size:12px;color:var(--mut2);line-height:1.65}
+.hint-card code{font-family:var(--mono);font-size:11px;color:var(--ylw)}
+
+/* ════════════════════════════════════════
+   ANALYSIS PAGE
+════════════════════════════════════════ */
+#analysis{padding:0}
+
+/* Sticky top bar */
+.topbar{
+  position:sticky;top:0;z-index:200;
+  background:rgba(7,9,14,0.96);backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--bord);
+  padding:10px 28px;display:flex;align-items:center;gap:16px;
+}
+.tb-logo{font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:0.16em;color:var(--grn);text-transform:uppercase;flex-shrink:0}
+.tb-logo span{color:var(--mut2);font-weight:400}
+.tb-nav{display:flex;gap:0;overflow-x:auto;flex:1}
+.tb-nav::-webkit-scrollbar{display:none}
+.tb-link{
+  font-family:var(--mono);font-size:10px;letter-spacing:0.08em;text-transform:uppercase;
+  color:var(--mut2);padding:10px 16px;text-decoration:none;
+  border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap;flex-shrink:0;
+}
+.tb-link:hover{color:var(--txt)}
+.tb-link.active{color:var(--grn);border-bottom-color:var(--grn)}
+.tb-btns{display:flex;gap:8px;margin-left:auto;flex-shrink:0}
+.btn{
+  display:inline-flex;align-items:center;gap:6px;padding:7px 14px;
+  border:1px solid var(--bord2);border-radius:4px;background:var(--bg3);
+  color:var(--txt);font-family:var(--sans);font-size:12px;font-weight:400;
+  cursor:pointer;transition:all .15s;white-space:nowrap;
+}
+.btn:hover{border-color:var(--grn);color:var(--grn)}
+.btn.p{border-color:rgba(0,223,160,0.4);color:var(--grn);background:var(--grn2)}
+
+/* Sections */
+.section{
+  max-width:1300px;margin:0 auto;padding:40px 28px 60px;
+  border-bottom:1px solid var(--bord);
+  scroll-margin-top:56px;
+}
+.section:last-child{border-bottom:none}
+
+.sec-header{display:flex;align-items:center;gap:14px;margin-bottom:24px}
+.sec-num{
+  font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:0.08em;
+  color:var(--grn);background:var(--grn2);border:1px solid rgba(0,223,160,0.25);
+  padding:3px 10px;border-radius:3px;
+}
+.sec-title{font-size:22px;font-weight:500;letter-spacing:-0.3px}
+.sec-sub{font-size:13px;color:var(--mut2);line-height:1.7;margin-bottom:20px}
+.sec-sub strong{color:var(--txt);font-weight:500}
+
+/* Controls row */
+.controls{
+  display:flex;align-items:center;flex-wrap:wrap;gap:14px;
+  background:var(--bg2);border:1px solid var(--bord);border-radius:6px;
+  padding:14px 18px;margin-bottom:14px;
+}
+.ctrl-group{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ctrl-label{font-family:var(--mono);font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:var(--mut);white-space:nowrap}
+
+/* Toggle buttons */
+.tog{
+  font-family:var(--mono);font-size:10px;padding:4px 12px;border-radius:4px;
+  border:1px solid var(--bord2);background:transparent;color:var(--mut2);
+  cursor:pointer;transition:all .15s;white-space:nowrap;
+}
+.tog:hover{border-color:var(--bord2);color:var(--txt)}
+.tog.on{color:var(--bg);font-weight:500}
+
+/* Rolling window slider */
+.slider-wrap{display:flex;align-items:center;gap:10px}
+.slider-wrap input[type=range]{
+  -webkit-appearance:none;width:120px;height:4px;
+  border-radius:2px;background:var(--bg3);outline:none;cursor:pointer;
+}
+.slider-wrap input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:14px;height:14px;border-radius:50%;
+  background:var(--grn);cursor:pointer;
+}
+.slider-val{font-family:var(--mono);font-size:11px;color:var(--grn);min-width:36px}
+
+/* Equation display */
+.eq-box{
+  font-family:var(--mono);font-size:12px;color:var(--ylw);
+  background:rgba(240,180,41,0.08);border:1px solid rgba(240,180,41,0.2);
+  border-radius:4px;padding:6px 14px;white-space:nowrap;
+}
+
+/* Chart card */
+.chart-card{background:var(--card);border:1px solid var(--bord);border-radius:8px;padding:20px 22px;margin-bottom:14px}
+.chart-card h3{font-family:var(--mono);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:var(--mut2);margin-bottom:3px}
+.chart-card .csub{font-size:11px;color:var(--mut);margin-bottom:14px;line-height:1.5}
+.chart-wrap{position:relative}
+
+/* Stat row */
+.stat-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:9px;margin-bottom:14px}
+.stat{background:var(--card);border:1px solid var(--bord);border-radius:5px;padding:13px 16px;border-left:2px solid var(--sl,transparent)}
+.stat.g{--sl:var(--grn)}.stat.y{--sl:var(--ylw)}.stat.r{--sl:var(--red)}.stat.b{--sl:var(--blu)}.stat.p{--sl:var(--pur)}
+.stat-lbl{font-family:var(--mono);font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--mut);margin-bottom:8px}
+.stat-val{font-family:var(--mono);font-size:22px;font-weight:600;line-height:1;color:var(--txt)}
+.stat-unit{font-size:11px;font-weight:400;color:var(--mut2);margin-left:1px}
+.stat-note{font-size:11px;color:var(--mut);margin-top:5px;line-height:1.4}
+
+/* Download button */
+.dl-btn{
+  display:inline-flex;align-items:center;gap:7px;
+  padding:8px 18px;border:1px solid var(--bord2);border-radius:5px;
+  background:var(--bg3);color:var(--mut2);font-family:var(--mono);
+  font-size:10px;letter-spacing:0.06em;text-transform:uppercase;
+  cursor:pointer;transition:all .15s;margin-top:8px;
+}
+.dl-btn:hover{border-color:var(--grn);color:var(--grn)}
+
+/* Legend inline */
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px}
+.leg{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;color:var(--mut2)}
+.leg-line{width:20px;height:2px}
+.leg-dot{width:8px;height:8px;border-radius:50%}
+
+/* Loading overlay */
+#loadOverlay{
+  display:none;position:fixed;inset:0;z-index:500;
+  background:rgba(7,9,14,0.88);backdrop-filter:blur(8px);
+  align-items:center;justify-content:center;flex-direction:column;gap:16px;
+  font-family:var(--mono);font-size:13px;color:var(--grn);
+}
+#loadOverlay.show{display:flex}
+.spinner{width:32px;height:32px;border:2px solid var(--bord2);border-top-color:var(--grn);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* New files panel */
+.new-files-bar{
+  background:var(--bg2);border-bottom:1px solid var(--bord);
+  padding:14px 28px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  max-width:1300px;margin:0 auto;
+}
+.nf-label{font-family:var(--mono);font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--mut)}
+.nf-slot{
+  display:flex;align-items:center;gap:8px;
+  background:var(--bg3);border:1px solid var(--bord2);border-radius:5px;
+  padding:6px 12px;cursor:pointer;transition:border-color .15s;
+}
+.nf-slot:hover{border-color:var(--grn)}
+.nf-slot-name{font-family:var(--mono);font-size:11px;color:var(--mut2)}
+.nf-slot.loaded .nf-slot-name{color:var(--grn)}
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════
+     LANDING PAGE
+══════════════════════════════════════════════ -->
+<div id="landing" class="page active">
+  <div class="land-logo">FRC <span>//</span> Battery Analyzer</div>
+  <div class="land-title">Match Battery Analysis</div>
+  <div class="land-sub">
+    Upload your <strong>DS Log</strong> (voltage source) and <strong>CAN JSON</strong> (current source) from the RoboRIO.
+    Current is computed as the sum of all device currents on the CAN bus — more accurate than battery-side measurement alone.
+  </div>
+
+  <div class="upload-grid">
+    <!-- DS Log -->
+    <div class="upload-card" id="card-ds" onclick="document.getElementById('input-ds').click()">
+      <div class="uc-icon">📋</div>
+      <div class="uc-label">Required</div>
+      <div class="uc-title">DS Log</div>
+      <div class="uc-sub">
+        <code>.dslog</code> binary or <code>.csv</code> export.<br>
+        Provides battery voltage data at ~50 Hz.
+      </div>
+      <div class="uc-filename" id="ds-filename">No file selected</div>
+    </div>
+    <input type="file" id="input-ds" accept="*">
+
+    <!-- CAN JSON -->
+    <div class="upload-card optional" id="card-can" onclick="document.getElementById('input-can').click()">
+      <div class="uc-icon">🔌</div>
+      <div class="uc-label">Required for current</div>
+      <div class="uc-title">CAN JSON</div>
+      <div class="uc-sub">
+        JSON array from RoboRIO CAN bus logging.<br>
+        Each record has device currents — <code>current</code>, <code>outputCurrent</code>, or similar.
+      </div>
+      <div class="uc-filename" id="can-filename">No file selected</div>
+    </div>
+    <input type="file" id="input-can" accept=".json,.txt,.csv,*">
+  </div>
+
+  <button class="land-analyze" id="analyzeBtn" disabled onclick="runAnalysis()">⚡ Analyze</button>
+  <button class="land-demo" onclick="runDemo()">Load demo match data</button>
+
+  <div class="land-hints">
+    <div class="hint-card">
+      <h4>DS Log export</h4>
+      <p>DS Log File Viewer → select log → <code>File → Export CSV</code>. The raw <code>.dslog</code> binary also works — voltage is extracted via stride-based decode.</p>
+    </div>
+    <div class="hint-card">
+      <h4>CAN JSON format</h4>
+      <p>Log each CAN device's current via WPILib or Advantage Scope. Expected: a JSON array where each object has a <code>time</code> field and one or more current fields per device (e.g. <code>leftDrive_current</code>, <code>shooter_outputCurrent</code>).</p>
+    </div>
+    <div class="hint-card">
+      <h4>Why sum CAN currents?</h4>
+      <p>The battery-side current measurement includes regenerative effects and sensor noise. Summing per-device CAN currents gives a cleaner picture of what your robot actually demands at each moment.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     ANALYSIS PAGE
+══════════════════════════════════════════════ -->
+<div id="analysis" class="page">
+
+  <!-- Sticky nav -->
+  <div class="topbar">
+    <div class="tb-logo">FRC <span>//</span> Battery</div>
+    <nav class="tb-nav">
+      <a class="tb-link active" href="#s-voltage" onclick="setActiveNav(this)">① Voltage</a>
+      <a class="tb-link" href="#s-current" onclick="setActiveNav(this)">② Current</a>
+      <a class="tb-link" href="#s-power" onclick="setActiveNav(this)">③ Power</a>
+      <a class="tb-link" href="#s-impedance" onclick="setActiveNav(this)">④ Impedance</a>
+    </nav>
+    <div class="tb-btns">
+      <button class="btn p" onclick="goBack()">⬆ New files</button>
+    </div>
+  </div>
+
+  <!-- New files quick-swap bar -->
+  <div class="new-files-bar">
+    <span class="nf-label">Loaded files:</span>
+    <div class="nf-slot" id="nf-ds" onclick="document.getElementById('nf-input-ds').click()">
+      <span>📋</span><span class="nf-slot-name" id="nf-ds-name">No DS log</span>
+    </div>
+    <input type="file" id="nf-input-ds" accept="*" onchange="swapFile('ds',this)">
+    <div class="nf-slot" id="nf-can" onclick="document.getElementById('nf-input-can').click()">
+      <span>🔌</span><span class="nf-slot-name" id="nf-can-name">No CAN JSON</span>
+    </div>
+    <input type="file" id="nf-input-can" accept=".json,.txt,.csv,*" onchange="swapFile('can',this)">
+    <button class="btn" onclick="rerun()" id="rerunBtn" style="display:none">↻ Re-analyze</button>
+  </div>
+
+  <!-- ① VOLTAGE -->
+  <section class="section" id="s-voltage">
+    <div class="sec-header">
+      <span class="sec-num">01</span>
+      <span class="sec-title">Voltage</span>
+    </div>
+    <div class="sec-sub">
+      Voltage sourced from the DS log. <strong>Rolling window</strong> uses a causal minimum (worst-case dip) to expose brownout events.
+      The <strong>regression line</strong> shows the overall depletion trend. Click the legend buttons to show/hide each series.
+    </div>
+
+    <div class="stat-row" id="vStats"></div>
+
+    <div class="controls">
+      <div class="ctrl-group">
+        <span class="ctrl-label">Show</span>
+        <button class="tog on" id="tog-v-raw"  style="--tc:var(--grn)"  onclick="toggleLine('v','raw')">Raw voltage</button>
+        <button class="tog on" id="tog-v-roll" style="--tc:var(--ylw)"  onclick="toggleLine('v','roll')">Rolling min</button>
+        <button class="tog on" id="tog-v-reg"  style="--tc:var(--pur)"  onclick="toggleLine('v','reg')">Regression</button>
+      </div>
+      <div class="ctrl-group">
+        <span class="ctrl-label">Window</span>
+        <div class="slider-wrap">
+          <input type="range" id="slider-v" min="1" max="250" value="5" oninput="updateRolling('v',this.value)">
+          <span class="slider-val" id="slider-v-lbl">0.1s</span>
+        </div>
+      </div>
+      <div class="eq-box" id="eq-v">Regression: —</div>
+    </div>
+
+    <div class="chart-card">
+      <h3>Voltage over time</h3>
+      <div class="csub">DS log terminal voltage. Horizontal dashed lines: 6.3V radio brownout · 8.5V motor torque loss.</div>
+      <div class="chart-wrap" style="height:320px"><canvas id="chartV"></canvas></div>
+    </div>
+
+    <button class="dl-btn" onclick="downloadCSV('voltage')">⬇ Download voltage data (.csv)</button>
+  </section>
+
+  <!-- ② CURRENT -->
+  <section class="section" id="s-current">
+    <div class="sec-header">
+      <span class="sec-num">02</span>
+      <span class="sec-title">Current</span>
+    </div>
+    <div class="sec-sub">
+      Current is the <strong>sum of all device currents</strong> from the CAN JSON — one reading per timestep.
+      Relative maxima (local peaks) are plotted as a scatter to visualise spike events. The regression is fitted to those peaks.
+    </div>
+
+    <div class="stat-row" id="cStats"></div>
+
+    <div class="controls">
+      <div class="ctrl-group">
+        <span class="ctrl-label">Show</span>
+        <button class="tog on" id="tog-c-raw"   onclick="toggleLine('c','raw')">Raw current</button>
+        <button class="tog on" id="tog-c-roll"  onclick="toggleLine('c','roll')">Rolling mean</button>
+        <button class="tog on" id="tog-c-peaks" onclick="toggleLine('c','peaks')">Peak scatter</button>
+        <button class="tog on" id="tog-c-reg"   onclick="toggleLine('c','reg')">Regression (peaks)</button>
+      </div>
+      <div class="ctrl-group">
+        <span class="ctrl-label">Window</span>
+        <div class="slider-wrap">
+          <input type="range" id="slider-c" min="1" max="250" value="5" oninput="updateRolling('c',this.value)">
+          <span class="slider-val" id="slider-c-lbl">0.1s</span>
+        </div>
+      </div>
+      <div class="eq-box" id="eq-c">Regression: —</div>
+    </div>
+
+    <div class="chart-card">
+      <h3>Current over time</h3>
+      <div class="csub">Summed CAN device currents. Scatter = local maxima above 30A. Dashed: 120A main breaker · 160A critical.</div>
+      <div class="chart-wrap" style="height:320px"><canvas id="chartC"></canvas></div>
+    </div>
+
+    <button class="dl-btn" onclick="downloadCSV('current')">⬇ Download current data (.csv)</button>
+  </section>
+
+  <!-- ③ POWER -->
+  <section class="section" id="s-power">
+    <div class="sec-header">
+      <span class="sec-num">03</span>
+      <span class="sec-title">Power</span>
+    </div>
+    <div class="sec-sub">
+      Instantaneous power P = V × I using DS log voltage and summed CAN current.
+      The regression line shows whether power demand trends up (battery sagging, motors drawing more) or remains flat.
+    </div>
+
+    <div class="stat-row" id="pStats"></div>
+
+    <div class="controls">
+      <div class="ctrl-group">
+        <span class="ctrl-label">Show</span>
+        <button class="tog on" id="tog-p-raw"  onclick="toggleLine('p','raw')">Raw power</button>
+        <button class="tog on" id="tog-p-roll" onclick="toggleLine('p','roll')">Rolling mean</button>
+        <button class="tog on" id="tog-p-reg"  onclick="toggleLine('p','reg')">Regression</button>
+      </div>
+      <div class="ctrl-group">
+        <span class="ctrl-label">Window</span>
+        <div class="slider-wrap">
+          <input type="range" id="slider-p" min="1" max="250" value="25" oninput="updateRolling('p',this.value)">
+          <span class="slider-val" id="slider-p-lbl">0.5s</span>
+        </div>
+      </div>
+      <div class="eq-box" id="eq-p">Regression: —</div>
+    </div>
+
+    <div class="chart-card">
+      <h3>Power over time</h3>
+      <div class="csub">P = V × I. Dashed: 1500W sustained warning.</div>
+      <div class="chart-wrap" style="height:320px"><canvas id="chartP"></canvas></div>
+    </div>
+
+    <button class="dl-btn" onclick="downloadCSV('power')">⬇ Download power data (.csv)</button>
+  </section>
+
+  <!-- ④ IMPEDANCE -->
+  <section class="section" id="s-impedance">
+    <div class="sec-header">
+      <span class="sec-num">04</span>
+      <span class="sec-title">Impedance</span>
+    </div>
+    <div class="sec-sub">
+      Internal resistance R = (V_oc − V) / I, computed at every current peak (I &gt; 15A).
+      The <strong>voltage-at-peak scatter</strong> overlays terminal voltage at each impedance sample to show how sag correlates with resistance.
+      Regression fitted to impedance samples over time.
+    </div>
+
+    <div class="stat-row" id="iStats"></div>
+
+    <div class="controls">
+      <div class="ctrl-group">
+        <span class="ctrl-label">Show</span>
+        <button class="tog on" id="tog-i-raw"   onclick="toggleLine('i','raw')">Impedance (mΩ)</button>
+        <button class="tog on" id="tog-i-roll"  onclick="toggleLine('i','roll')">Rolling median</button>
+        <button class="tog on" id="tog-i-reg"   onclick="toggleLine('i','reg')">Regression</button>
+        <button class="tog on" id="tog-i-vscat" onclick="toggleLine('i','vscat')">Voltage @ peaks</button>
+      </div>
+      <div class="ctrl-group">
+        <span class="ctrl-label">Window</span>
+        <div class="slider-wrap">
+          <input type="range" id="slider-i" min="1" max="250" value="25" oninput="updateRolling('i',this.value)">
+          <span class="slider-val" id="slider-i-lbl">0.5s</span>
+        </div>
+      </div>
+      <div class="eq-box" id="eq-i">Regression: —</div>
+    </div>
+
+    <div class="chart-card">
+      <h3>Impedance over time</h3>
+      <div class="csub">R = (V_oc − V) / I at current peaks. Dashed: 28mΩ replacement threshold. Right axis = voltage at each peak.</div>
+      <div class="chart-wrap" style="height:340px"><canvas id="chartI"></canvas></div>
+    </div>
+
+    <button class="dl-btn" onclick="downloadCSV('impedance')">⬇ Download impedance data (.csv)</button>
+  </section>
+
+</div><!-- /analysis -->
+
+<!-- Loading overlay -->
+<div id="loadOverlay">
+  <div class="spinner"></div>
+  <span id="loadMsg">Parsing files…</span>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+//  GLOBALS
+// ═══════════════════════════════════════════════════════════════════
+const SAMPLE_HZ = 50;        // DS log rate
+const I_MIN_IMPEDANCE = 15;  // A — minimum current for impedance calc
+
+let G = {
+  dsFile: null, canFile: null,
+  dsData: null, canData: null,  // raw parsed arrays
+  // merged aligned arrays (all same length, dt-aligned)
+  times: [], volts: [], currents: [], power: [], impSamples: [],
+  ocv: 12.8, dt: 0.02,
+};
+
+// Per-chart state: stores current datasets so toggles can hide/show
+let CHARTS = { v: null, c: null, p: null, i: null };
+let CHART_DATA = {}; // stores computed arrays for CSV export
+
+// ═══════════════════════════════════════════════════════════════════
+//  LANDING PAGE — FILE INPUT
+// ═══════════════════════════════════════════════════════════════════
+document.getElementById('input-ds').addEventListener('change', e => {
+  if (!e.target.files[0]) return;
+  G.dsFile = e.target.files[0];
+  document.getElementById('ds-filename').textContent = G.dsFile.name;
+  document.getElementById('card-ds').classList.add('has-file');
+  checkReady();
+});
+document.getElementById('input-can').addEventListener('change', e => {
+  if (!e.target.files[0]) return;
+  G.canFile = e.target.files[0];
+  document.getElementById('can-filename').textContent = G.canFile.name;
+  document.getElementById('card-can').classList.add('has-file');
+  checkReady();
+});
+
+// Drag and drop on landing cards
+['card-ds','card-can'].forEach(id => {
+  const card = document.getElementById(id);
+  card.addEventListener('dragover', e => { e.preventDefault(); card.style.borderColor = 'var(--grn)'; });
+  card.addEventListener('dragleave', () => { card.style.borderColor = ''; });
+  card.addEventListener('drop', e => {
+    e.preventDefault(); card.style.borderColor = '';
+    const f = e.dataTransfer.files[0]; if (!f) return;
+    if (id === 'card-ds') {
+      G.dsFile = f;
+      document.getElementById('ds-filename').textContent = f.name;
+      card.classList.add('has-file');
+    } else {
+      G.canFile = f;
+      document.getElementById('can-filename').textContent = f.name;
+      card.classList.add('has-file');
+    }
+    checkReady();
+  });
+});
+
+function checkReady() {
+  // Analysis requires at least DS log; CAN is needed for current/power/impedance
+  document.getElementById('analyzeBtn').disabled = !G.dsFile;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  ANALYSIS PAGE — FILE SWAP
+// ═══════════════════════════════════════════════════════════════════
+function swapFile(type, input) {
+  if (!input.files[0]) return;
+  if (type === 'ds') {
+    G.dsFile = input.files[0];
+    document.getElementById('nf-ds-name').textContent = G.dsFile.name;
+    document.getElementById('nf-ds').classList.add('loaded');
+  } else {
+    G.canFile = input.files[0];
+    document.getElementById('nf-can-name').textContent = G.canFile.name;
+    document.getElementById('nf-can').classList.add('loaded');
+  }
+  document.getElementById('rerunBtn').style.display = 'inline-flex';
+}
+function rerun() {
+  document.getElementById('rerunBtn').style.display = 'none';
+  runAnalysis();
+}
+function goBack() {
+  showPage('landing');
+  destroyCharts();
+}
+function setActiveNav(el) {
+  document.querySelectorAll('.tb-link').forEach(a => a.classList.remove('active'));
+  el.classList.add('active');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  PAGE NAVIGATION
+// ═══════════════════════════════════════════════════════════════════
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  LOADING OVERLAY
+// ═══════════════════════════════════════════════════════════════════
+function setLoading(msg) {
+  const o = document.getElementById('loadOverlay');
+  if (msg) { o.classList.add('show'); document.getElementById('loadMsg').textContent = msg; }
+  else { o.classList.remove('show'); }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  DS LOG PARSER — VOLTAGE ONLY
+//  Returns [{t, v}]  sorted by t
+// ═══════════════════════════════════════════════════════════════════
+function parseDSLog(file, cb) {
+  const nm = file.name.toLowerCase();
+  if (nm.endsWith('.dslog') || nm.endsWith('.dsevents')) {
+    const r = new FileReader();
+    r.onload = e => cb(parseDSBinary(new DataView(e.target.result)));
+    r.readAsArrayBuffer(file);
+  } else {
+    const r = new FileReader();
+    r.onload = e => cb(parseDSCSV(e.target.result));
+    r.readAsText(file);
+  }
+}
+
+function parseDSBinary(dv) {
+  const len = dv.byteLength;
+  // Try stride-based decode for known DS Log formats
+  for (const stride of [22, 20, 24, 16, 32, 28]) {
+    if (len < stride * 20) continue;
+    let samples = [], good = 0;
+    for (let off = 0; off + stride <= len; off += stride) {
+      try {
+        const cands = [
+          dv.getUint16(off+4, true)/256, dv.getUint16(off+2, true)/256,
+          dv.getUint8(off+4)/10,         dv.getUint16(off+6, true)/1000,
+          dv.getUint16(off+4, false)/256
+        ];
+        const v = cands.find(c => c >= 6 && c <= 14.5);
+        if (v !== undefined) { good++; samples.push(v); }
+      } catch(e) {}
+    }
+    if (good > len/stride * 0.55 && samples.length > 50) {
+      return samples.map((v, i) => ({ t: +(i*0.02).toFixed(3), v: +v.toFixed(4) }));
+    }
+  }
+  // Last resort: scan uint16 LE for voltage-range values
+  const found = [];
+  for (let off = 0; off+2 <= len; off += 2) {
+    const v = dv.getUint16(off, true) / 1000;
+    if (v >= 8 && v <= 14) found.push(v);
+    if (found.length > 10000) break;
+  }
+  return found.length > 100 ? found.map((v,i) => ({ t: +(i*0.02).toFixed(3), v: +v.toFixed(4) })) : null;
+}
+
+function parseDSCSV(raw) {
+  // Auto-detect delimiter, find header, locate voltage column
+  const lines = raw.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n').filter(l=>l.trim());
+  if (lines.length < 5) return null;
+  const samp = lines.slice(0,6).join('\n');
+  const tc=(samp.match(/\t/g)||[]).length, cc=(samp.match(/,/g)||[]).length, sc=(samp.match(/;/g)||[]).length;
+  const delim = tc>cc&&tc>sc ? '\t' : sc>cc ? ';' : ',';
+  const split = l => l.split(delim).map(s=>s.trim().replace(/"/g,''));
+
+  let hIdx=0, hdrs=[];
+  for (let i=0; i<Math.min(8,lines.length); i++) {
+    const cols = split(lines[i]);
+    if (cols.filter(c=>!isNaN(parseFloat(c))&&c!=='').length < cols.length*0.65) { hdrs=cols; hIdx=i; break; }
+  }
+
+  const find = (...kws) => {
+    for (const kw of kws) {
+      const k = kw.toLowerCase().replace(/[^a-z]/g,'');
+      const i = hdrs.findIndex(h => h.toLowerCase().replace(/[^a-z]/g,'').includes(k));
+      if (i !== -1) return i;
+    }
+    return -1;
+  };
+
+  let iT = find('time','timestamp','elapsed');
+  let iV = find('battery','voltage','volt','batt','vbat');
+
+  // Fallback: detect voltage column by value range
+  if (iV === -1) {
+    const ncols = split(lines[hIdx+1]||lines[0]).length;
+    const colS = Array.from({length:ncols}, ()=>[]);
+    for (let i=hIdx+1; i<Math.min(hIdx+200,lines.length); i++)
+      split(lines[i]).forEach((c,j)=>{const v=parseFloat(c);if(!isNaN(v))colS[j].push(v);});
+    for (let j=0; j<ncols; j++) {
+      const s=[...colS[j]].sort((a,b)=>a-b), med=s[Math.floor(s.length/2)];
+      if (med>=9&&med<=13.5&&s[0]>=5) { iV=j; if(iT===-1&&j>0)iT=0; break; }
+    }
+  }
+  if (iV === -1) return null;
+
+  const data = [];
+  for (let i=hIdx+1; i<lines.length; i++) {
+    const cols = split(lines[i]);
+    const v = parseFloat(cols[iV]);
+    if (isNaN(v) || v<3 || v>16) continue;
+    const t = iT!==-1 ? parseFloat(cols[iT]) : data.length*0.02;
+    data.push({ t: isNaN(t)?data.length*0.02:t, v: +v.toFixed(4) });
+  }
+  return data.length > 10 ? data : null;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  CAN JSON PARSER — CURRENT SUMMATION
+//  Accepts any JSON: array of objects or object with nested arrays
+//  Sums all numeric fields that look like current (A) at each timestep
+//  Returns [{t, current}]
+// ═══════════════════════════════════════════════════════════════════
+function parseCANJSON(file, cb) {
+  const r = new FileReader();
+  r.onload = e => {
+    try {
+      const text = e.target.result.trim();
+      let json;
+      try { json = JSON.parse(text); } catch(_) {
+        // Try parsing as newline-delimited JSON
+        const rows = text.split('\n').filter(l=>l.trim()).map(l=>JSON.parse(l));
+        json = rows;
+      }
+      cb(extractCANCurrents(json));
+    } catch(err) {
+      console.warn('CAN JSON parse error:', err);
+      cb(null);
+    }
+  };
+  r.readAsText(file);
+}
+
+function extractCANCurrents(json) {
+  // Normalise to array of records
+  let records = [];
+  if (Array.isArray(json)) {
+    records = json;
+  } else if (typeof json === 'object') {
+    // Maybe {timestamps:[], device1:[], device2:[]} (columnar format)
+    if (Array.isArray(json.timestamps) || Array.isArray(json.time) || Array.isArray(json.t)) {
+      const times = json.timestamps || json.time || json.t;
+      const currentKeys = Object.keys(json).filter(k =>
+        k !== 'timestamps' && k !== 'time' && k !== 't' && Array.isArray(json[k])
+      );
+      records = times.map((t, i) => {
+        const rec = { time: t };
+        currentKeys.forEach(k => { rec[k] = json[k][i]; });
+        return rec;
+      });
+    } else {
+      records = [json]; // single record fallback
+    }
+  }
+  if (!records.length) return null;
+
+  // Heuristic to identify current fields:
+  // Names containing: current, amps, amp, output, stator, supply, bus
+  // Values in range [-500, 500] A
+  const isCurrentKey = k => {
+    const lk = k.toLowerCase().replace(/[^a-z]/g,'');
+    return ['current','amps','amp','outputcurrent','statorcurrent',
+            'supplycurrent','buscurrent','motorcurrent','drawcurrent'].some(kw => lk.includes(kw));
+  };
+
+  // Sample first record to find current keys
+  const sample = records[0] || {};
+  let currentKeys = Object.keys(sample).filter(k => isCurrentKey(k) && typeof sample[k] === 'number');
+
+  // If no named current keys found, try all numeric fields in current range
+  if (!currentKeys.length) {
+    currentKeys = Object.keys(sample).filter(k => {
+      if (k.toLowerCase().replace(/[^a-z]/g,'').includes('time')) return false;
+      const v = parseFloat(sample[k]);
+      return !isNaN(v) && Math.abs(v) <= 500;
+    });
+  }
+
+  // Find time key
+  const timeKey = Object.keys(sample).find(k => {
+    const lk = k.toLowerCase().replace(/[^a-z]/g,'');
+    return lk === 'time' || lk === 'timestamp' || lk === 'elapsed' || lk === 't';
+  }) || null;
+
+  const data = [];
+  records.forEach((rec, idx) => {
+    const t = timeKey ? parseFloat(rec[timeKey]) : idx * 0.02;
+    if (isNaN(t)) return;
+    // Sum all current values, treating negatives as 0 (regenerative braking is not a load)
+    let sum = 0;
+    currentKeys.forEach(k => {
+      const v = parseFloat(rec[k]);
+      if (!isNaN(v)) sum += Math.max(0, v);
+    });
+    data.push({ t: isNaN(t) ? data.length*0.02 : t, current: +sum.toFixed(3) });
+  });
+  return data.length > 3 ? data : null;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  MERGE DS + CAN onto a common time grid
+//  DS log is the master (defines time grid). CAN is resampled to it.
+// ═══════════════════════════════════════════════════════════════════
+function mergeData(dsData, canData) {
+  // Sort both by time
+  dsData.sort((a,b) => a.t-b.t);
+  if (canData) canData.sort((a,b) => a.t-b.t);
+
+  const times = dsData.map(d => d.t);
+  const volts  = dsData.map(d => d.v);
+  const dt = times.length > 1 ? (times[times.length-1] - times[0]) / (times.length-1) : 0.02;
+
+  // Interpolate CAN current to DS timestamps
+  let currents = [];
+  if (canData && canData.length > 3) {
+    let ci = 0;
+    for (const ds of dsData) {
+      // Advance CAN pointer until we straddle ds.t
+      while (ci < canData.length-2 && canData[ci+1].t <= ds.t) ci++;
+      if (ci >= canData.length-1) {
+        currents.push(canData[canData.length-1].current);
+      } else if (ds.t <= canData[0].t) {
+        currents.push(canData[0].current);
+      } else {
+        // Linear interpolation
+        const a = canData[ci], b = canData[ci+1];
+        const frac = b.t === a.t ? 0 : (ds.t - a.t) / (b.t - a.t);
+        currents.push(+(a.current + frac*(b.current - a.current)).toFixed(3));
+      }
+    }
+  } else {
+    currents = new Array(times.length).fill(NaN);
+  }
+
+  return { times, volts, currents, dt };
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  ROLLING WINDOW UTILITIES
+// ═══════════════════════════════════════════════════════════════════
+// All rolling functions are causal (backward-looking window): out[i] uses arr[i-w+1..i]
+
+function rollingMin(arr, w) {
+  const out = new Float64Array(arr.length);
+  for (let i=0; i<arr.length; i++) {
+    let m = Infinity;
+    for (let j=Math.max(0,i-w+1); j<=i; j++) m = Math.min(m, arr[j]);
+    out[i] = m;
+  }
+  return out;
+}
+
+function rollingMean(arr, w) {
+  // O(n) accumulator
+  const out = new Float64Array(arr.length);
+  let s=0, c=0;
+  for (let i=0; i<arr.length; i++) {
+    s += arr[i]; c++;
+    if (i >= w) { s -= arr[i-w]; c--; }
+    out[i] = s/c;
+  }
+  return out;
+}
+
+function rollingMedian(arr, w) {
+  // O(n·w) — acceptable for w ≤ 250
+  const out = new Float64Array(arr.length);
+  for (let i=0; i<arr.length; i++) {
+    const win = Array.from(arr.slice(Math.max(0,i-w+1), i+1)).sort((a,b)=>a-b);
+    out[i] = win[Math.floor(win.length/2)];
+  }
+  return out;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  LINEAR REGRESSION
+//  Returns {m, b, r2} for y = m*x + b
+// ═══════════════════════════════════════════════════════════════════
+function linReg(xs, ys) {
+  const n = Math.min(xs.length, ys.length);
+  if (n < 3) return { m: 0, b: 0, r2: 0 };
+  let sx=0, sy=0, sxx=0, sxy=0, syy=0;
+  for (let i=0; i<n; i++) {
+    sx+=xs[i]; sy+=ys[i]; sxx+=xs[i]*xs[i]; sxy+=xs[i]*ys[i]; syy+=ys[i]*ys[i];
+  }
+  const denom = n*sxx - sx*sx;
+  if (denom === 0) return { m: 0, b: sy/n, r2: 0 };
+  const m = (n*sxy - sx*sy)/denom;
+  const b = (sy - m*sx)/n;
+  const ss_tot = syy - sy*sy/n;
+  const ss_res = syy - m*sxy - b*sy;
+  const r2 = ss_tot===0 ? 1 : Math.max(0, 1 - ss_res/ss_tot);
+  return { m: +m.toFixed(8), b: +b.toFixed(6), r2: +r2.toFixed(4) };
+}
+
+function regLine(xs, ys) {
+  const reg = linReg(xs, ys);
+  if (!xs.length) return { reg, data:[] };
+  const x0=xs[0], x1=xs[xs.length-1];
+  return { reg, data:[{x:x0,y:reg.m*x0+reg.b},{x:x1,y:reg.m*x1+reg.b}] };
+}
+
+function fmtEq(reg, xLabel='t', yLabel='y') {
+  const sign = reg.b >= 0 ? '+' : '-';
+  return `${yLabel} = ${reg.m.toExponential(3)}·${xLabel} ${sign} ${Math.abs(reg.b).toFixed(4)}  (R²=${reg.r2.toFixed(3)})`;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  LOCAL MAXIMA FINDER
+//  Returns indices where arr[i] > arr[i-1] and arr[i] > arr[i+1] and arr[i] > threshold
+// ═══════════════════════════════════════════════════════════════════
+function localMaxima(arr, threshold = 0, minGap = 5) {
+  const peaks = [];
+  for (let i=1; i<arr.length-1; i++) {
+    if (arr[i] > threshold && arr[i] >= arr[i-1] && arr[i] >= arr[i+1]) {
+      // Enforce minimum gap between peaks
+      if (!peaks.length || i - peaks[peaks.length-1] >= minGap) peaks.push(i);
+    }
+  }
+  return peaks;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  MAIN ANALYSIS PIPELINE
+// ═══════════════════════════════════════════════════════════════════
+function runAnalysis() {
+  setLoading('Parsing DS log…');
+  parseDSLog(G.dsFile, dsData => {
+    if (!dsData || dsData.length < 10) {
+      setLoading('');
+      alert('Could not parse DS log.\n\nMake sure it is a .dslog binary or a CSV with a voltage column (values 6–15 V).');
+      return;
+    }
+    G.dsData = dsData;
+
+    if (G.canFile) {
+      setLoading('Parsing CAN JSON…');
+      parseCANJSON(G.canFile, canData => {
+        G.canData = canData;
+        computeAndRender();
+      });
+    } else {
+      G.canData = null;
+      computeAndRender();
+    }
+  });
+}
+
+function computeAndRender() {
+  setLoading('Computing…');
+  setTimeout(() => {
+    const { times, volts, currents, dt } = mergeData(G.dsData, G.canData);
+    G.times = times; G.volts = volts; G.currents = currents; G.dt = dt;
+    const n = times.length;
+    const hasCurr = currents.some(c => !isNaN(c) && c > 0);
+
+    // OCV: mean of top 3% of voltage samples
+    const sortedV = [...volts].sort((a,b)=>b-a);
+    const topN = Math.max(3, Math.floor(n*0.03));
+    const ocv = sortedV.slice(0,topN).reduce((a,b)=>a+b,0)/topN;
+    G.ocv = ocv;
+
+    // Power array
+    const power = volts.map((v,i) => hasCurr&&!isNaN(currents[i]) ? Math.max(0, v*currents[i]) : NaN);
+    G.power = power;
+
+    // Impedance samples: only at current local maxima with I > 15A
+    const safeCurr = currents.map(c => isNaN(c)?0:Math.max(0,c));
+    const peakIdxC = localMaxima(safeCurr, I_MIN_IMPEDANCE, Math.max(1, Math.round(0.1/dt)));
+    const impSamples = peakIdxC.map(idx => {
+      const sag = Math.max(0, ocv - volts[idx]);
+      const R = safeCurr[idx] > 0 ? sag / safeCurr[idx] : NaN;
+      return { idx, t: times[idx], v: volts[idx], c: safeCurr[idx], sag, R: R*1000 }; // R in mΩ
+    }).filter(s => !isNaN(s.R) && s.R > 0 && s.R < 150);
+    G.impSamples = impSamples;
+
+    // Current peaks (for scatter)
+    const peakIdxAll = localMaxima(safeCurr, 30, Math.max(1, Math.round(0.1/dt)));
+
+    // ── Store all computed data for CSV export ────────────────────
+    const defaultWindow = 5; // samples = 0.1s at 50Hz
+    const rollV  = rollingMin(new Float64Array(volts), defaultWindow);
+    const rollC  = hasCurr ? rollingMean(new Float64Array(safeCurr), defaultWindow) : null;
+    const rollP  = hasCurr ? rollingMean(new Float64Array(power.map(p=>isNaN(p)?0:p)), defaultWindow) : null;
+    const impArr = impSamples.map(s=>s.R);
+    const impTimes = impSamples.map(s=>s.t);
+
+    CHART_DATA = {
+      times, volts, rollV: Array.from(rollV),
+      currents, safeCurr, rollC: rollC?Array.from(rollC):null,
+      power, rollP: rollP?Array.from(rollP):null,
+      impSamples, peakIdxC, peakIdxAll, ocv, hasCurr, dt, n
+    };
+
+    // ── Stats ────────────────────────────────────────────────────
+    renderStats(volts, safeCurr, power, impSamples, hasCurr, ocv, dt, n);
+
+    // ── Render charts ─────────────────────────────────────────────
+    destroyCharts();
+    renderVChart(defaultWindow);
+    renderCChart(defaultWindow, peakIdxAll);
+    renderPChart(defaultWindow);
+    renderIChart(defaultWindow);
+
+    // Update new-files bar
+    document.getElementById('nf-ds-name').textContent = G.dsFile?.name || 'DS log';
+    document.getElementById('nf-ds').classList.add('loaded');
+    if (G.canFile) {
+      document.getElementById('nf-can-name').textContent = G.canFile.name;
+      document.getElementById('nf-can').classList.add('loaded');
+    }
+
+    setLoading('');
+    showPage('analysis');
+  }, 60);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  STATS CARDS
+// ═══════════════════════════════════════════════════════════════════
+function S(label, val, unit, note, cls) {
+  return `<div class="stat ${cls}">
+    <div class="stat-lbl">${label}</div>
+    <div class="stat-val">${val}<span class="stat-unit">${unit}</span></div>
+    <div class="stat-note">${note}</div>
+  </div>`;
+}
+const f2=v=>isNaN(v)||v==null?'—':(+v).toFixed(2);
+const f1=v=>isNaN(v)||v==null?'—':(+v).toFixed(1);
+const f0=v=>isNaN(v)||v==null?'—':Math.round(+v);
+
+function renderStats(volts, curr, power, impSamples, hasCurr, ocv, dt, n) {
+  const vMin=Math.min(...volts), vMax=Math.max(...volts), vMean=volts.reduce((a,b)=>a+b)/n;
+  const nBelow85=volts.filter(v=>v<8.5).length, nBelow63=volts.filter(v=>v<6.3).length;
+  document.getElementById('vStats').innerHTML =
+    S('Min voltage',     f2(vMin),  'V', 'Lowest single sample',      vMin>=8.5?'g':vMin>=7.5?'y':'r')+
+    S('OCV estimate',    f2(ocv),   'V', 'Top-3% sample average',     'b')+
+    S('Mean voltage',    f2(vMean), 'V', 'Average across match',      vMean>=11?'g':vMean>=10?'y':'r')+
+    S('< 8.5V time',     f2(nBelow85*dt),'s','Motor torque loss zone',nBelow85===0?'g':nBelow85<50?'y':'r')+
+    S('< 6.3V time',     f2(nBelow63*dt),'s','Radio brownout zone',   nBelow63===0?'g':'r');
+
+  if (hasCurr) {
+    const cValid=curr.filter(c=>c>0);
+    const cMax=Math.max(...cValid)||0, cMean=cValid.reduce((a,b)=>a+b,0)/(cValid.length||1);
+    document.getElementById('cStats').innerHTML =
+      S('Peak current',   f1(cMax),    'A', 'Highest CAN sum sample',   cMax<120?'g':cMax<160?'y':'r')+
+      S('Mean current',   f1(cMean),   'A', 'Average demand',           cMean<60?'g':cMean<90?'y':'r')+
+      S('> 120A samples', curr.filter(c=>c>120).length,'','Above main breaker threshold',curr.filter(c=>c>120).length===0?'g':'r')+
+      S('CAN devices',    '—',         '',  'Devices summed from JSON',  'b');
+    const pValid=power.filter(p=>!isNaN(p)&&p>0);
+    const pMax=Math.max(...pValid)||0, pMean=pValid.reduce((a,b)=>a+b,0)/(pValid.length||1);
+    const totalWh=pValid.reduce((a,b)=>a+b,0)*dt/3600;
+    document.getElementById('pStats').innerHTML =
+      S('Peak power',     f0(pMax),    'W',  'Highest instantaneous W',  pMax<2000?'g':pMax<3000?'y':'r')+
+      S('Mean power',     f0(pMean),   'W',  'Average demand',           pMean<800?'g':pMean<1200?'y':'r')+
+      S('Total energy',   f2(totalWh), 'Wh', 'Used this match',          totalWh<108?'g':totalWh<151?'y':'r')+
+      S('% of 216Wh',     f1(totalWh/216*100),'%','Battery capacity used',totalWh/216<0.5?'g':totalWh/216<0.7?'y':'r');
+  } else {
+    document.getElementById('cStats').innerHTML=`<div style="color:var(--mut);font-family:var(--mono);font-size:12px;padding:12px">No CAN JSON loaded — current data unavailable.</div>`;
+    document.getElementById('pStats').innerHTML=`<div style="color:var(--mut);font-family:var(--mono);font-size:12px;padding:12px">No CAN JSON loaded — power data unavailable.</div>`;
+  }
+  if (impSamples.length > 3) {
+    const Rs = impSamples.map(s=>s.R).sort((a,b)=>a-b);
+    const medR = Rs[Math.floor(Rs.length/2)];
+    const p90R = Rs[Math.floor(Rs.length*0.9)];
+    const ccaEst = medR>0 ? Math.round(7200/medR) : NaN; // 7200 = 7.2Ω × 1000mΩ/Ω
+    document.getElementById('iStats').innerHTML =
+      S('Median R',       f1(medR),    'mΩ', 'Representative resistance', medR<=18?'g':medR<=28?'y':'r')+
+      S('P90 R',          f1(p90R),    'mΩ', 'Under heavy current',       p90R<=25?'g':p90R<=40?'y':'r')+
+      S('Spike factor',   f1(p90R/medR),'×', 'P90/Median',                p90R/medR<=2?'g':p90R/medR<=3.5?'y':'r')+
+      S('Est. CCA',       f0(ccaEst),  'A',  '7200/R_median empirical',   isNaN(ccaEst)?'':ccaEst>=400?'g':ccaEst>=260?'y':'r')+
+      S('R samples',      impSamples.length,'','I>15A peak samples used', 'b');
+  } else {
+    document.getElementById('iStats').innerHTML=`<div style="color:var(--mut);font-family:var(--mono);font-size:12px;padding:12px">Not enough high-current samples for impedance analysis.</div>`;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  CHART RENDERING
+//  Each chart stores its Chart.js instance so lines can be toggled
+// ═══════════════════════════════════════════════════════════════════
+let CH={};
+function destroyCharts(){Object.values(CH).forEach(c=>c&&c.destroy());CH={};}
+
+const MO = { responsive:true, maintainAspectRatio:false, animation:false };
+const TX = { color:'#47506a', font:{family:'IBM Plex Mono',size:10} };
+const GR = { color:'rgba(255,255,255,0.04)' };
+const AX = { ticks:TX, grid:GR };
+const AXNG = { ticks:TX, grid:{display:false} };
+
+// Threshold h-line plugin
+function hLinePlugin(lines) {
+  return { afterDraw(chart) {
+    lines.forEach(({y,scaleId='y',color,label}) => {
+      const sc=chart.scales[scaleId]; if(!sc) return;
+      const {ctx,chartArea:ca}=chart, py=sc.getPixelForValue(y);
+      if(py<ca.top||py>ca.bottom) return;
+      ctx.save();ctx.beginPath();ctx.strokeStyle=color;ctx.lineWidth=1;ctx.setLineDash([4,4]);
+      ctx.moveTo(ca.left,py);ctx.lineTo(ca.right,py);ctx.stroke();
+      ctx.font='9px IBM Plex Mono';ctx.fillStyle=color;ctx.textAlign='right';
+      ctx.fillText(label,ca.right-4,py-3);ctx.restore();
+    });
+  }};
+}
+
+// Downsample to max N points for performance
+function ds(arr, max=900) {
+  const step = Math.max(1, Math.floor(arr.length/max));
+  const out=[]; for(let i=0;i<arr.length;i+=step) out.push(arr[i]);
+  return out;
+}
+function dsIdx(n, max=900) {
+  const step=Math.max(1,Math.floor(n/max));
+  return Array.from({length:Math.ceil(n/step)},(_,i)=>i*step);
+}
+
+// VOLTAGE CHART
+function renderVChart(w) {
+  const {times,volts,dt}=CHART_DATA;
+  const rollV = Array.from(rollingMin(new Float64Array(volts), w));
+  const {reg:regV, data:regPts} = regLine(times, volts);
+  document.getElementById('eq-v').textContent = 'Regression: ' + fmtEq(regV,'t','V');
+
+  const step=Math.max(1,Math.floor(times.length/900));
+  const T=[],V=[],RV=[],xT=[],xV=[];
+  for(let i=0;i<times.length;i+=step){T.push(+times[i].toFixed(2));V.push(+volts[i].toFixed(4));RV.push(+rollV[i].toFixed(4));}
+  times.forEach((_,i)=>{if(i%step===0){xT.push(times[i]);xV.push(regV.m*times[i]+regV.b);}});
+
+  CHART_DATA.rollV_cur = rollV;
+  CHART_DATA.regV = regV;
+
+  if (CH.v) CH.v.destroy();
+  CH.v = new Chart(document.getElementById('chartV'), {
+    data:{labels:T,datasets:[
+      {type:'line',label:'Raw voltage',         data:V,  borderColor:'#00dfa0', borderWidth:1.2,pointRadius:0,yAxisID:'yV',fill:false,tension:0.04,order:3},
+      {type:'line',label:'Rolling min',          data:RV, borderColor:'#f0b429', borderWidth:2,  pointRadius:0,yAxisID:'yV',fill:false,tension:0.1, order:2},
+      {type:'line',label:'Regression',           data:xV, borderColor:'#a78bfa', borderWidth:1.5,pointRadius:0,yAxisID:'yV',fill:false,tension:0,   order:1,borderDash:[6,4]},
+    ]},
+    options:{...MO,plugins:{legend:{display:false}},
+      scales:{x:{...AX,ticks:{...TX,maxTicksLimit:12}},
+        yV:{...AX,ticks:{...TX,color:'#00dfa0'},title:{display:true,text:'V',color:'#00dfa0',font:{size:10,family:'IBM Plex Mono'}}}}},
+    plugins:[hLinePlugin([
+      {y:6.3,color:'rgba(255,64,64,0.55)',label:'6.3V radio'},
+      {y:8.5,color:'rgba(255,110,26,0.45)',label:'8.5V motors'}
+    ])]
+  });
+  applyToggles('v');
+}
+
+// CURRENT CHART
+function renderCChart(w, peakIdxAll) {
+  const {times,safeCurr,hasCurr,dt}=CHART_DATA;
+  if (!hasCurr) return;
+  const rollC = Array.from(rollingMean(new Float64Array(safeCurr), w));
+  const pTimes=peakIdxAll.map(i=>times[i]), pVals=peakIdxAll.map(i=>safeCurr[i]);
+  const {reg:regC, data:regPts} = regLine(pTimes, pVals);
+  document.getElementById('eq-c').textContent = 'Regression (peaks): ' + fmtEq(regC,'t','I');
+
+  const step=Math.max(1,Math.floor(times.length/900));
+  const T=[],C=[],RC=[];
+  for(let i=0;i<times.length;i+=step){T.push(+times[i].toFixed(2));C.push(+safeCurr[i].toFixed(2));RC.push(+rollC[i].toFixed(2));}
+
+  const scatterPts=peakIdxAll.map(i=>({x:+times[i].toFixed(2),y:+safeCurr[i].toFixed(2)}));
+  const regLinePts=regPts;
+
+  CHART_DATA.rollC_cur=rollC; CHART_DATA.regC=regC; CHART_DATA.peakIdxAll_cur=peakIdxAll;
+
+  if (CH.c) CH.c.destroy();
+  CH.c = new Chart(document.getElementById('chartC'), {
+    data:{labels:T,datasets:[
+      {type:'line',   label:'Raw current',   data:C,          borderColor:'rgba(61,143,255,0.5)', borderWidth:1,   pointRadius:0,yAxisID:'yC',fill:false,tension:0.04,order:4},
+      {type:'line',   label:'Rolling mean',  data:RC,         borderColor:'#3d8fff',              borderWidth:2,   pointRadius:0,yAxisID:'yC',fill:false,tension:0.1, order:3},
+      {type:'scatter',label:'Peak scatter',  data:scatterPts, backgroundColor:'rgba(255,110,26,0.6)',pointRadius:3,yAxisID:'yC',order:2},
+      {type:'line',   label:'Regression',    data:regLinePts, borderColor:'#a78bfa',              borderWidth:1.5, pointRadius:0,yAxisID:'yC',fill:false,tension:0,   order:1,borderDash:[6,4],
+        parsing:{xAxisKey:'x',yAxisKey:'y'}},
+    ]},
+    options:{...MO,plugins:{legend:{display:false}},
+      scales:{x:{...AX,ticks:{...TX,maxTicksLimit:12}},
+        yC:{...AX,min:0,ticks:{...TX,color:'#3d8fff'},title:{display:true,text:'A',color:'#3d8fff',font:{size:10,family:'IBM Plex Mono'}}}}},
+    plugins:[hLinePlugin([
+      {y:120,color:'rgba(255,110,26,0.6)',label:'120A breaker'},
+      {y:160,color:'rgba(255,64,64,0.6)', label:'160A critical'}
+    ])]
+  });
+  applyToggles('c');
+}
+
+// POWER CHART
+function renderPChart(w) {
+  const {times,power,hasCurr,dt}=CHART_DATA;
+  if (!hasCurr) return;
+  const safePow = power.map(p=>isNaN(p)?0:p);
+  const rollP = Array.from(rollingMean(new Float64Array(safePow), w));
+  const {reg:regP,data:regPts} = regLine(times, safePow);
+  document.getElementById('eq-p').textContent = 'Regression: ' + fmtEq(regP,'t','P');
+
+  const step=Math.max(1,Math.floor(times.length/900));
+  const T=[],P=[],RP=[];
+  for(let i=0;i<times.length;i+=step){T.push(+times[i].toFixed(2));P.push(+safePow[i].toFixed(1));RP.push(+rollP[i].toFixed(1));}
+  const xV=T.map(t=>+(regP.m*t+regP.b).toFixed(1));
+
+  CHART_DATA.rollP_cur=rollP; CHART_DATA.regP=regP;
+
+  if (CH.p) CH.p.destroy();
+  CH.p = new Chart(document.getElementById('chartP'), {
+    data:{labels:T,datasets:[
+      {type:'line',label:'Raw power',    data:P,  borderColor:'rgba(167,139,250,0.4)', borderWidth:1.2,pointRadius:0,yAxisID:'yP',fill:false,tension:0.04,order:3},
+      {type:'line',label:'Rolling mean', data:RP, borderColor:'#a78bfa',               borderWidth:2,  pointRadius:0,yAxisID:'yP',fill:false,tension:0.1, order:2},
+      {type:'line',label:'Regression',   data:xV, borderColor:'#22d3ee',               borderWidth:1.5,pointRadius:0,yAxisID:'yP',fill:false,tension:0,   order:1,borderDash:[6,4]},
+    ]},
+    options:{...MO,plugins:{legend:{display:false}},
+      scales:{x:{...AX,ticks:{...TX,maxTicksLimit:12}},
+        yP:{...AX,min:0,ticks:{...TX,color:'#a78bfa'},title:{display:true,text:'W',color:'#a78bfa',font:{size:10,family:'IBM Plex Mono'}}}}},
+    plugins:[hLinePlugin([{y:1500,color:'rgba(255,110,26,0.5)',label:'1500W'}])]
+  });
+  applyToggles('p');
+}
+
+// IMPEDANCE CHART
+function renderIChart(w) {
+  const {impSamples,times,volts}=CHART_DATA;
+  if (!impSamples.length) return;
+  const iT  = impSamples.map(s=>s.t);
+  const iR  = impSamples.map(s=>+s.R.toFixed(3));
+  const iV  = impSamples.map(s=>+s.v.toFixed(4));
+  const rollI = Array.from(rollingMedian(new Float64Array(iR), Math.max(1,w)));
+  const {reg:regI,data:regPts} = regLine(iT, iR);
+  document.getElementById('eq-i').textContent = 'Regression: ' + fmtEq(regI,'t','R(mΩ)');
+
+  const iColors = iR.map(r=>r<18?'rgba(0,223,160,0.6)':r<28?'rgba(240,180,41,0.65)':'rgba(255,64,64,0.7)');
+  const vScatPts = impSamples.map(s=>({x:+s.t.toFixed(2),y:+s.v.toFixed(4)}));
+
+  CHART_DATA.rollI_cur=rollI; CHART_DATA.regI=regI; CHART_DATA.iT=iT; CHART_DATA.iR=iR; CHART_DATA.iV=iV;
+
+  if (CH.i) CH.i.destroy();
+  CH.i = new Chart(document.getElementById('chartI'), {
+    data:{labels:iT.map(t=>+t.toFixed(2)),datasets:[
+      {type:'bar',    label:'Impedance (mΩ)',   data:iR,       backgroundColor:iColors,         borderWidth:0,barPercentage:1.4,categoryPercentage:1.4,yAxisID:'yR',order:4},
+      {type:'line',   label:'Rolling median',   data:rollI,    borderColor:'#f0b429',            borderWidth:2,  pointRadius:0,yAxisID:'yR',fill:false,tension:0.3,order:3},
+      {type:'line',   label:'Regression',       data:iT.map(t=>+(regI.m*t+regI.b).toFixed(3)),
+        borderColor:'#22d3ee',borderWidth:1.5,pointRadius:0,yAxisID:'yR',fill:false,tension:0,borderDash:[6,4],order:2},
+      {type:'scatter',label:'Voltage @ peaks',  data:vScatPts, backgroundColor:'rgba(0,223,160,0.35)',pointRadius:3,yAxisID:'yV2',
+        parsing:{xAxisKey:'x',yAxisKey:'y'},order:1},
+    ]},
+    options:{...MO,plugins:{legend:{display:false}},
+      scales:{
+        x:{...AX,ticks:{...TX,maxTicksLimit:12}},
+        yR:{position:'left',...AX,min:0,max:Math.min(100,Math.max(...iR)*1.15),
+          ticks:{...TX,color:'#f0b429'},title:{display:true,text:'mΩ',color:'#f0b429',font:{size:10,family:'IBM Plex Mono'}}},
+        yV2:{position:'right',ticks:{...TX,color:'rgba(0,223,160,0.7)'},grid:{display:false},
+          title:{display:true,text:'V @ peak',color:'rgba(0,223,160,0.7)',font:{size:10,family:'IBM Plex Mono'}}}
+      }},
+    plugins:[hLinePlugin([{y:28,scaleId:'yR',color:'rgba(255,110,26,0.5)',label:'28mΩ replace'}])]
+  });
+  applyToggles('i');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  TOGGLE LINES
+// ═══════════════════════════════════════════════════════════════════
+// Map chart key → dataset indices for each named series
+const DS_MAP = {
+  v: {raw:0, roll:1, reg:2},
+  c: {raw:0, roll:1, peaks:2, reg:3},
+  p: {raw:0, roll:1, reg:2},
+  i: {raw:0, roll:1, reg:2, vscat:3},
+};
+const TOG_COLORS = {
+  'v-raw':'#00dfa0','v-roll':'#f0b429','v-reg':'#a78bfa',
+  'c-raw':'#3d8fff','c-roll':'#3d8fff','c-peaks':'#ff6e1a','c-reg':'#a78bfa',
+  'p-raw':'#a78bfa','p-roll':'#a78bfa','p-reg':'#22d3ee',
+  'i-raw':'#f0b429','i-roll':'#f0b429','i-reg':'#22d3ee','i-vscat':'#00dfa0',
+};
+
+function applyToggles(chartKey) {
+  const chart = CH[chartKey]; if (!chart) return;
+  Object.keys(DS_MAP[chartKey]).forEach(name => {
+    const togId = `tog-${chartKey}-${name}`;
+    const togEl = document.getElementById(togId); if (!togEl) return;
+    const isOn = togEl.classList.contains('on');
+    const dsIdx2 = DS_MAP[chartKey][name];
+    chart.data.datasets[dsIdx2].hidden = !isOn;
+    const col = TOG_COLORS[`${chartKey}-${name}`];
+    togEl.style.background = isOn ? col : 'transparent';
+    togEl.style.color = isOn ? 'var(--bg)' : 'var(--mut2)';
+    togEl.style.borderColor = isOn ? col : 'var(--bord2)';
+  });
+  chart.update('none');
+}
+
+function toggleLine(chartKey, name) {
+  const togId = `tog-${chartKey}-${name}`;
+  const togEl = document.getElementById(togId); if (!togEl) return;
+  togEl.classList.toggle('on');
+  applyToggles(chartKey);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  UPDATE ROLLING WINDOW (slider)
+// ═══════════════════════════════════════════════════════════════════
+function sliderToWindow(val) {
+  // Map 1–250 slider → 1–250 samples (0.02s–5.0s at 50Hz)
+  return Math.max(1, Math.round(+val));
+}
+function windowLabel(w, dt) {
+  const s = w * dt;
+  return s < 1 ? `${(s).toFixed(2)}s` : `${s.toFixed(1)}s`;
+}
+
+function updateRolling(chartKey, sliderVal) {
+  const w = sliderToWindow(sliderVal);
+  const dt = CHART_DATA.dt || 0.02;
+  document.getElementById(`slider-${chartKey}-lbl`).textContent = windowLabel(w, dt);
+
+  if (chartKey === 'v') {
+    if (!CH.v) return;
+    const rollV = Array.from(rollingMin(new Float64Array(CHART_DATA.volts), w));
+    const step=Math.max(1,Math.floor(CHART_DATA.times.length/900));
+    const RV=[]; for(let i=0;i<CHART_DATA.times.length;i+=step) RV.push(+rollV[i].toFixed(4));
+    CH.v.data.datasets[1].data = RV;
+    CH.v.update('none');
+
+  } else if (chartKey === 'c') {
+    if (!CH.c||!CHART_DATA.hasCurr) return;
+    const rollC = Array.from(rollingMean(new Float64Array(CHART_DATA.safeCurr), w));
+    const step=Math.max(1,Math.floor(CHART_DATA.times.length/900));
+    const RC=[]; for(let i=0;i<CHART_DATA.times.length;i+=step) RC.push(+rollC[i].toFixed(2));
+    CH.c.data.datasets[1].data = RC;
+    CH.c.update('none');
+
+  } else if (chartKey === 'p') {
+    if (!CH.p||!CHART_DATA.hasCurr) return;
+    const safePow=CHART_DATA.power.map(p=>isNaN(p)?0:p);
+    const rollP = Array.from(rollingMean(new Float64Array(safePow), w));
+    const step=Math.max(1,Math.floor(CHART_DATA.times.length/900));
+    const RP=[]; for(let i=0;i<CHART_DATA.times.length;i+=step) RP.push(+rollP[i].toFixed(1));
+    CH.p.data.datasets[1].data = RP;
+    CH.p.update('none');
+
+  } else if (chartKey === 'i') {
+    if (!CH.i||!CHART_DATA.impSamples.length) return;
+    const iR = CHART_DATA.impSamples.map(s=>s.R);
+    const rollI = Array.from(rollingMedian(new Float64Array(iR), Math.max(1,w)));
+    CH.i.data.datasets[1].data = rollI;
+    CH.i.update('none');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  CSV DOWNLOAD
+// ═══════════════════════════════════════════════════════════════════
+function downloadCSV(section) {
+  const {times,volts,currents,power,impSamples,dt} = CHART_DATA;
+  let rows=[], header='';
+
+  if (section === 'voltage') {
+    const rollV = CHART_DATA.rollV_cur || Array.from(rollingMin(new Float64Array(volts),5));
+    const regV  = CHART_DATA.regV || linReg(times,volts);
+    header = 'time_s,voltage_V,rolling_min_V,regression_V';
+    rows = times.map((t,i)=>`${t.toFixed(3)},${volts[i].toFixed(4)},${rollV[i].toFixed(4)},${(regV.m*t+regV.b).toFixed(4)}`);
+
+  } else if (section === 'current') {
+    const safe = CHART_DATA.safeCurr||currents.map(c=>isNaN(c)?0:Math.max(0,c));
+    const rollC = CHART_DATA.rollC_cur || Array.from(rollingMean(new Float64Array(safe),5));
+    header = 'time_s,current_A,rolling_mean_A,is_peak';
+    const peakSet = new Set(CHART_DATA.peakIdxAll_cur||[]);
+    rows = times.map((t,i)=>`${t.toFixed(3)},${safe[i].toFixed(2)},${rollC[i].toFixed(2)},${peakSet.has(i)?1:0}`);
+
+  } else if (section === 'power') {
+    const safePow = power.map(p=>isNaN(p)?0:p);
+    const rollP = CHART_DATA.rollP_cur || Array.from(rollingMean(new Float64Array(safePow),25));
+    const regP  = CHART_DATA.regP || linReg(times,safePow);
+    header = 'time_s,power_W,rolling_mean_W,regression_W';
+    rows = times.map((t,i)=>`${t.toFixed(3)},${safePow[i].toFixed(1)},${rollP[i].toFixed(1)},${(regP.m*t+regP.b).toFixed(1)}`);
+
+  } else if (section === 'impedance') {
+    const rollI = CHART_DATA.rollI_cur;
+    const regI  = CHART_DATA.regI;
+    header = 'time_s,voltage_V,current_A,sag_V,impedance_mohm,rolling_median_mohm,regression_mohm';
+    rows = impSamples.map((s,i)=>{
+      const rm  = rollI ? rollI[i].toFixed(3) : '';
+      const reg = regI  ? (regI.m*s.t+regI.b).toFixed(3) : '';
+      return `${s.t.toFixed(3)},${s.v.toFixed(4)},${s.c.toFixed(2)},${s.sag.toFixed(4)},${s.R.toFixed(3)},${rm},${reg}`;
+    });
+  }
+
+  const csv = [header, ...rows].join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const url  = URL.createObjectURL(blob);
+  const a    = Object.assign(document.createElement('a'), {href:url, download:`frc_battery_${section}.csv`});
+  a.click(); URL.revokeObjectURL(url);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  DEMO DATA — synthetic match
+// ═══════════════════════════════════════════════════════════════════
+function runDemo() {
+  setLoading('Generating demo data…');
+  setTimeout(() => {
+    // DS log: synthetic voltage trace
+    const dsData=[], canData=[];
+    let soc=0.91, t=0;
+    for (let i=0; i<8000; i++) {
+      const load = i<250 ? 8+Math.random()*4
+                 : i<1000 ? 70+Math.sin(i*0.2)*40+(Math.random()<0.08?140:0)+Math.random()*10
+                 : 52+Math.sin(i*0.055)*35+Math.sin(i*0.22)*18+(Math.random()<0.05?155+Math.random()*60:0)+Math.random()*12;
+      const imp  = 0.013 + (1-soc)*0.028 + (Math.random()-0.5)*0.003;
+      const v    = Math.max(6.1, 12.6*soc - load*imp + (Math.random()-0.5)*0.07);
+      dsData.push({t:+t.toFixed(3), v:+v.toFixed(4)});
+      // CAN: split total load into ~6 devices
+      canData.push({
+        t:+t.toFixed(3),
+        leftFront_current:   +(load*0.22+(Math.random()-0.5)*2).toFixed(2),
+        leftRear_current:    +(load*0.22+(Math.random()-0.5)*2).toFixed(2),
+        rightFront_current:  +(load*0.22+(Math.random()-0.5)*2).toFixed(2),
+        rightRear_current:   +(load*0.22+(Math.random()-0.5)*2).toFixed(2),
+        shooter_outputCurrent:+(load*0.08+(Math.random()-0.5)*1).toFixed(2),
+        intake_outputCurrent: +(load*0.04+(Math.random()-0.5)*0.5).toFixed(2),
+      });
+      soc -= load*1e-7; t += 0.02;
+    }
+    G.dsFile  = { name: 'demo_match.dslog' };
+    G.canFile = { name: 'demo_can.json' };
+    G.dsData  = dsData;
+    G.canData = extractCANCurrents(canData);
+    computeAndRender();
+  }, 40);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  SCROLL SPY — highlight active nav link
+// ═══════════════════════════════════════════════════════════════════
+const sections = ['s-voltage','s-current','s-power','s-impedance'];
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      const id = e.target.id;
+      document.querySelectorAll('.tb-link').forEach(a => {
+        a.classList.toggle('active', a.getAttribute('href')==='#'+id);
+      });
+    }
+  });
+}, { rootMargin:'-40% 0px -55% 0px' });
+
+// Register after page loads
+window.addEventListener('load', () => {
+  sections.forEach(id => {
+    const el=document.getElementById(id); if(el) observer.observe(el);
+  });
+});
+</script>
+</body>
+</html>
