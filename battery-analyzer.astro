@@ -1,0 +1,430 @@
+---
+// src/pages/battery-analyzer.astro
+// Drop this file into your Astro pages directory.
+// It uses your existing Layout component and Tailwind config.
+// The <script> tag at the bottom is the only JS — no framework needed.
+
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Battery Analyzer | YETI Robotics">
+
+  <!-- ═══════════════════════════════════════════════════════════
+       LANDING PANEL  (shown until files are loaded + analyzed)
+  ═══════════════════════════════════════════════════════════ -->
+  <div id="landing" class="min-h-screen flex flex-col items-center justify-center px-6 py-16">
+
+    <!-- Header -->
+    <div class="text-center mb-10">
+      <div class="inline-flex items-center gap-2 text-xs font-mono tracking-widest text-yeti-blue uppercase mb-4">
+        <span class="w-6 h-px bg-yeti-blue"></span>
+        YETI Robotics · Team 3506
+        <span class="w-6 h-px bg-yeti-blue"></span>
+      </div>
+      <h1 class="text-4xl font-bold text-white tracking-tight mb-3">Battery Analyzer</h1>
+      <p class="text-slate-400 text-base max-w-lg mx-auto leading-relaxed">
+        Upload a <span class="text-white font-medium">DS log file</span> to analyze battery
+        voltage, current, power, and internal impedance across your match.
+      </p>
+    </div>
+
+    <!-- Upload card -->
+    <div
+      id="dropCard"
+      onclick="document.getElementById('fileInput').click()"
+      class="w-full max-w-lg border-2 border-dashed border-slate-600 rounded-xl p-12 text-center
+             cursor-pointer transition-all duration-200
+             hover:border-yeti-blue hover:bg-slate-800/40 group"
+    >
+      <!-- Icon -->
+      <div class="flex justify-center mb-5">
+        <div class="w-14 h-14 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center
+                    group-hover:border-yeti-blue group-hover:bg-slate-700 transition-all">
+          <svg class="w-6 h-6 text-slate-400 group-hover:text-yeti-blue transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+              d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
+          </svg>
+        </div>
+      </div>
+
+      <p class="text-white font-semibold text-base mb-1">Drop your DS log here</p>
+      <p class="text-slate-500 text-sm mb-5">
+        Accepts <code class="text-yeti-blue bg-slate-800 px-1.5 py-0.5 rounded text-xs">.dslog</code>
+        binary or CSV export from DS Log File Viewer
+      </p>
+
+      <button
+        onclick="event.stopPropagation(); document.getElementById('fileInput').click()"
+        class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg
+               bg-yeti-blue/10 border border-yeti-blue/40 text-yeti-blue text-sm font-medium
+               hover:bg-yeti-blue/20 transition-colors"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+        </svg>
+        Choose file
+      </button>
+
+      <input type="file" id="fileInput" accept="*" class="hidden" />
+    </div>
+
+    <!-- Demo button -->
+    <button
+      id="demoBtn"
+      class="mt-4 text-sm text-slate-500 hover:text-slate-300 transition-colors underline underline-offset-2"
+    >
+      or load a demo match →
+    </button>
+
+    <!-- Format hints -->
+    <div class="mt-10 grid grid-cols-1 sm:grid-cols-3 gap-4 w-full max-w-lg">
+      <div class="bg-slate-800/60 border border-slate-700 rounded-lg p-4">
+        <p class="text-xs font-mono text-yeti-blue uppercase tracking-wider mb-1.5">DS Log Viewer</p>
+        <p class="text-xs text-slate-400 leading-relaxed">
+          Select log → <code class="text-slate-300">File → Export CSV</code>. Raw <code class="text-slate-300">.dslog</code> binary also works.
+        </p>
+      </div>
+      <div class="bg-slate-800/60 border border-slate-700 rounded-lg p-4">
+        <p class="text-xs font-mono text-yeti-blue uppercase tracking-wider mb-1.5">Current source</p>
+        <p class="text-xs text-slate-400 leading-relaxed">
+          Current is read directly from the DS log. No CAN JSON needed.
+        </p>
+      </div>
+      <div class="bg-slate-800/60 border border-slate-700 rounded-lg p-4">
+        <p class="text-xs font-mono text-yeti-blue uppercase tracking-wider mb-1.5">What you get</p>
+        <p class="text-xs text-slate-400 leading-relaxed">
+          Voltage, current, power, and impedance — each with raw + rolling + regression.
+        </p>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ═══════════════════════════════════════════════════════════
+       ANALYSIS PAGE  (hidden until analysis completes)
+  ═══════════════════════════════════════════════════════════ -->
+  <div id="analysisPage" class="hidden">
+
+    <!-- Sticky top bar -->
+    <div class="sticky top-0 z-50 bg-slate-900/95 backdrop-blur border-b border-slate-700/60">
+      <div class="max-w-7xl mx-auto px-6 flex items-center gap-0">
+
+        <!-- Section nav -->
+        <nav class="flex overflow-x-auto scrollbar-hide flex-1" id="sectionNav">
+          {[
+            ['#sec-voltage',   '① Voltage'],
+            ['#sec-current',   '② Current'],
+            ['#sec-power',     '③ Power'],
+            ['#sec-impedance', '④ Impedance'],
+          ].map(([href, label]) => (
+            <a
+              href={href}
+              class="nav-link shrink-0 px-5 py-4 text-xs font-mono tracking-wider uppercase text-slate-500
+                     border-b-2 border-transparent hover:text-white hover:border-slate-500
+                     transition-colors whitespace-nowrap"
+            >
+              {label}
+            </a>
+          ))}
+        </nav>
+
+        <!-- File info + new file button -->
+        <div class="flex items-center gap-3 ml-auto pl-4 shrink-0">
+          <span id="fileNameBadge" class="hidden text-xs font-mono text-slate-500 max-w-[180px] truncate"></span>
+          <button
+            id="newFileBtn"
+            class="text-xs px-3 py-1.5 rounded-md border border-slate-600 text-slate-400
+                   hover:border-slate-400 hover:text-white transition-colors font-mono"
+          >
+            ↑ New file
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- File swap input (hidden) -->
+    <input type="file" id="swapInput" accept="*" class="hidden" />
+
+    <!-- Page content -->
+    <div class="max-w-7xl mx-auto px-6 pb-24 space-y-0">
+
+      <!-- ── SECTION 1: VOLTAGE ── -->
+      <section id="sec-voltage" class="pt-12 pb-16 border-b border-slate-800 scroll-mt-16">
+
+        <div class="flex items-start justify-between gap-4 mb-2 flex-wrap">
+          <div>
+            <div class="flex items-center gap-3 mb-1">
+              <span class="text-xs font-mono tracking-widest text-yeti-blue uppercase">01</span>
+              <h2 class="text-2xl font-bold text-white">Voltage</h2>
+            </div>
+            <p class="text-sm text-slate-400 max-w-2xl leading-relaxed">
+              Terminal voltage from the DS log. The <span class="text-white">rolling minimum</span> uses
+              a causal window to expose brownout dips without smoothing them away. Adjust the window
+              with the slider. Click any legend item to hide/show that series.
+            </p>
+          </div>
+          <button onclick="downloadCSV('voltage')"
+            class="dl-btn shrink-0">
+            ↓ Export CSV
+          </button>
+        </div>
+
+        <!-- Stats -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3 my-6" id="vStats"></div>
+
+        <!-- Controls -->
+        <div class="flex flex-wrap items-center gap-4 bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-3 mb-4">
+          <span class="text-xs font-mono text-slate-500 uppercase tracking-wider">Show</span>
+          <div class="flex flex-wrap gap-2" id="vToggles"></div>
+          <div class="flex items-center gap-3 ml-auto">
+            <span class="text-xs font-mono text-slate-500 uppercase tracking-wider">Window</span>
+            <input type="range" id="sliderV" min="1" max="250" value="5" class="range-input w-28" />
+            <span id="sliderVLbl" class="text-xs font-mono text-yeti-blue w-10">0.1s</span>
+          </div>
+        </div>
+
+        <!-- Equation -->
+        <div class="eq-badge mb-3" id="eqV">Regression: —</div>
+
+        <!-- Chart -->
+        <div class="chart-card">
+          <div class="chart-wrap h-72 md:h-96">
+            <canvas id="chartV"></canvas>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- ── SECTION 2: CURRENT ── -->
+      <section id="sec-current" class="pt-12 pb-16 border-b border-slate-800 scroll-mt-16">
+
+        <div class="flex items-start justify-between gap-4 mb-2 flex-wrap">
+          <div>
+            <div class="flex items-center gap-3 mb-1">
+              <span class="text-xs font-mono tracking-widest text-yeti-blue uppercase">02</span>
+              <h2 class="text-2xl font-bold text-white">Current</h2>
+            </div>
+            <p class="text-sm text-slate-400 max-w-2xl leading-relaxed">
+              Total current drawn from the DS log. <span class="text-white">Relative maxima</span>
+              (local peaks above 30 A) are plotted as a scatter — their regression line shows whether
+              peak current events trend up or down across the match.
+            </p>
+          </div>
+          <button onclick="downloadCSV('current')" class="dl-btn shrink-0">↓ Export CSV</button>
+        </div>
+
+        <div id="noCurrentMsg" class="hidden bg-amber-900/20 border border-amber-700/40 rounded-lg px-4 py-3 mb-4">
+          <p class="text-sm text-amber-300">
+            No current column found in this log. Re-export from DS Log File Viewer with
+            <strong>Robot Current</strong> enabled for full analysis.
+          </p>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3 my-6" id="cStats"></div>
+
+        <div class="flex flex-wrap items-center gap-4 bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-3 mb-4">
+          <span class="text-xs font-mono text-slate-500 uppercase tracking-wider">Show</span>
+          <div class="flex flex-wrap gap-2" id="cToggles"></div>
+          <div class="flex items-center gap-3 ml-auto">
+            <span class="text-xs font-mono text-slate-500 uppercase tracking-wider">Window</span>
+            <input type="range" id="sliderC" min="1" max="250" value="5" class="range-input w-28" />
+            <span id="sliderCLbl" class="text-xs font-mono text-yeti-blue w-10">0.1s</span>
+          </div>
+        </div>
+
+        <div class="eq-badge mb-3" id="eqC">Regression (peaks): —</div>
+
+        <div class="chart-card">
+          <div class="chart-wrap h-72 md:h-96">
+            <canvas id="chartC"></canvas>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- ── SECTION 3: POWER ── -->
+      <section id="sec-power" class="pt-12 pb-16 border-b border-slate-800 scroll-mt-16">
+
+        <div class="flex items-start justify-between gap-4 mb-2 flex-wrap">
+          <div>
+            <div class="flex items-center gap-3 mb-1">
+              <span class="text-xs font-mono tracking-widest text-yeti-blue uppercase">03</span>
+              <h2 class="text-2xl font-bold text-white">Power</h2>
+            </div>
+            <p class="text-sm text-slate-400 max-w-2xl leading-relaxed">
+              Instantaneous power P = V × I. A rising regression slope means your robot demands
+              progressively more power — often caused by voltage sag forcing motors to draw higher
+              current to maintain torque.
+            </p>
+          </div>
+          <button onclick="downloadCSV('power')" class="dl-btn shrink-0">↓ Export CSV</button>
+        </div>
+
+        <div id="noPowerMsg" class="hidden bg-amber-900/20 border border-amber-700/40 rounded-lg px-4 py-3 mb-4">
+          <p class="text-sm text-amber-300">Power requires current data. Enable Robot Current in your DS log export.</p>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3 my-6" id="pStats"></div>
+
+        <div class="flex flex-wrap items-center gap-4 bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-3 mb-4">
+          <span class="text-xs font-mono text-slate-500 uppercase tracking-wider">Show</span>
+          <div class="flex flex-wrap gap-2" id="pToggles"></div>
+          <div class="flex items-center gap-3 ml-auto">
+            <span class="text-xs font-mono text-slate-500 uppercase tracking-wider">Window</span>
+            <input type="range" id="sliderP" min="1" max="250" value="25" class="range-input w-28" />
+            <span id="sliderPLbl" class="text-xs font-mono text-yeti-blue w-10">0.5s</span>
+          </div>
+        </div>
+
+        <div class="eq-badge mb-3" id="eqP">Regression: —</div>
+
+        <div class="chart-card">
+          <div class="chart-wrap h-72 md:h-96">
+            <canvas id="chartP"></canvas>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- ── SECTION 4: IMPEDANCE ── -->
+      <section id="sec-impedance" class="pt-12 pb-16 scroll-mt-16">
+
+        <div class="flex items-start justify-between gap-4 mb-2 flex-wrap">
+          <div>
+            <div class="flex items-center gap-3 mb-1">
+              <span class="text-xs font-mono tracking-widest text-yeti-blue uppercase">04</span>
+              <h2 class="text-2xl font-bold text-white">Impedance</h2>
+            </div>
+            <p class="text-sm text-slate-400 max-w-2xl leading-relaxed">
+              Internal resistance R = (V<sub>oc</sub> − V) / I, computed at each current peak.
+              The <span class="text-white">voltage scatter</span> overlays terminal voltage at
+              each impedance sample — showing whether high-R events coincide with already-depleted voltage.
+            </p>
+          </div>
+          <button onclick="downloadCSV('impedance')" class="dl-btn shrink-0">↓ Export CSV</button>
+        </div>
+
+        <div id="noImpedanceMsg" class="hidden bg-amber-900/20 border border-amber-700/40 rounded-lg px-4 py-3 mb-4">
+          <p class="text-sm text-amber-300">Impedance requires current data with I &gt; 15 A peaks.</p>
+        </div>
+
+        <!-- Condition bands -->
+        <div class="flex flex-wrap gap-2 mb-5" id="impBands"></div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3 my-6" id="iStats"></div>
+
+        <div class="flex flex-wrap items-center gap-4 bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-3 mb-4">
+          <span class="text-xs font-mono text-slate-500 uppercase tracking-wider">Show</span>
+          <div class="flex flex-wrap gap-2" id="iToggles"></div>
+          <div class="flex items-center gap-3 ml-auto">
+            <span class="text-xs font-mono text-slate-500 uppercase tracking-wider">Window</span>
+            <input type="range" id="sliderI" min="1" max="250" value="25" class="range-input w-28" />
+            <span id="sliderILbl" class="text-xs font-mono text-yeti-blue w-10">0.5s</span>
+          </div>
+        </div>
+
+        <div class="eq-badge mb-3" id="eqI">Regression: —</div>
+
+        <div class="chart-card">
+          <div class="chart-wrap h-72 md:h-[420px]">
+            <canvas id="chartI"></canvas>
+          </div>
+        </div>
+      </section>
+
+    </div><!-- /content -->
+  </div><!-- /analysisPage -->
+
+
+  <!-- Loading overlay -->
+  <div id="loadOverlay"
+    class="hidden fixed inset-0 z-[200] bg-slate-900/80 backdrop-blur-sm
+           flex flex-col items-center justify-center gap-4">
+    <div class="w-8 h-8 border-2 border-slate-600 border-t-yeti-blue rounded-full animate-spin"></div>
+    <span id="loadMsg" class="text-sm font-mono text-yeti-blue tracking-wider">Parsing…</span>
+  </div>
+
+</Layout>
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     STYLES  (scoped — Tailwind classes used above, extras here)
+═══════════════════════════════════════════════════════════ -->
+<style>
+  /* Range slider */
+  .range-input {
+    @apply appearance-none h-1 rounded-full bg-slate-700 outline-none cursor-pointer;
+  }
+  .range-input::-webkit-slider-thumb {
+    @apply appearance-none w-3.5 h-3.5 rounded-full bg-yeti-blue cursor-pointer;
+  }
+  .range-input::-moz-range-thumb {
+    @apply w-3.5 h-3.5 rounded-full bg-yeti-blue cursor-pointer border-0;
+  }
+
+  /* Toggle buttons */
+  .tog-btn {
+    @apply text-xs font-mono px-3 py-1.5 rounded-md border border-slate-600
+           text-slate-400 cursor-pointer transition-all duration-150
+           hover:border-slate-400 hover:text-white select-none;
+  }
+  .tog-btn.on {
+    @apply text-slate-900 font-medium border-transparent;
+  }
+
+  /* Chart wrapper */
+  .chart-card {
+    @apply bg-slate-800/40 border border-slate-700 rounded-xl p-4;
+  }
+  .chart-wrap {
+    @apply relative;
+  }
+
+  /* Equation badge */
+  .eq-badge {
+    @apply inline-block font-mono text-xs px-3 py-1.5 rounded-md
+           bg-amber-900/20 border border-amber-700/30 text-amber-300;
+  }
+
+  /* Download button */
+  .dl-btn {
+    @apply inline-flex items-center gap-2 text-xs font-mono px-4 py-2 rounded-lg
+           border border-slate-600 text-slate-400 bg-slate-800/50
+           hover:border-slate-400 hover:text-white transition-colors cursor-pointer;
+  }
+
+  /* Stat card */
+  .stat-card {
+    @apply bg-slate-800/60 border border-slate-700 rounded-lg p-4;
+  }
+  .stat-card.g { @apply border-l-2 border-l-emerald-500; }
+  .stat-card.y { @apply border-l-2 border-l-amber-400; }
+  .stat-card.r { @apply border-l-2 border-l-red-500; }
+  .stat-card.b { @apply border-l-2 border-l-yeti-blue; }
+
+  /* Nav active state */
+  .nav-link.active {
+    @apply text-yeti-blue border-b-2 border-yeti-blue;
+  }
+
+  /* Hide scrollbar utility */
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
+  .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+</style>
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     CHART.JS  (loaded from CDN, minimal external dep)
+═══════════════════════════════════════════════════════════ -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js" is:inline></script>
+
+<!-- ═══════════════════════════════════════════════════════════
+     ANALYSIS MODULE  (all logic is in batteryAnalyzer.js,
+     imported here as a module so it can access the DOM)
+═══════════════════════════════════════════════════════════ -->
+<script type="module">
+  import { initBatteryAnalyzer } from '../lib/batteryAnalyzer.js';
+  initBatteryAnalyzer();
+</script>
+
+</Layout>
